@@ -1,0 +1,21 @@
+experiment,scenario,series,plateau_mean,mser_truncation_h,warmup_in_use_h,exceeds_warmup_in_use,replications,bin_h
+s1,S1,parts_per_bin,5.6545498042627225,252.0,252.0,False,50,12.0
+s1,S1,wip_per_bin,21.886761991969074,132.0,252.0,False,50,12.0
+s2,S2 threshold 0.125,parts_per_bin,8.895611135276207,192.0,252.0,False,50,12.0
+s2,S2 threshold 0.125,wip_per_bin,20.848935309762783,156.0,252.0,False,50,12.0
+s2,S2 threshold 0.875,parts_per_bin,7.125023923444977,84.0,252.0,False,50,12.0
+s2,S2 threshold 0.875,wip_per_bin,20.803155538639988,132.0,252.0,False,50,12.0
+s3,S3 detection 0.50 false alarm 0.050,parts_per_bin,9.011148325358851,36.0,252.0,False,50,12.0
+s3,S3 detection 0.50 false alarm 0.050,wip_per_bin,21.46487504467198,180.0,252.0,False,50,12.0
+s4,S4 run-to-failure capacity 10,parts_per_bin,5.6545498042627225,252.0,516.0,False,50,12.0
+s4,S4 run-to-failure capacity 10,wip_per_bin,21.886761991969074,132.0,516.0,False,50,12.0
+s4,S4 run-to-failure capacity 0,parts_per_bin,2.510269682470639,276.0,516.0,False,50,12.0
+s4,S4 run-to-failure capacity 0,wip_per_bin,0.0,0.0,516.0,False,50,12.0
+s4,S4 run-to-failure capacity 20,parts_per_bin,6.352749021313615,348.0,516.0,False,50,12.0
+s4,S4 run-to-failure capacity 20,wip_per_bin,42.220551978974314,516.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 10,parts_per_bin,9.796507177033494,72.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 10,wip_per_bin,20.531065603204592,216.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 0,parts_per_bin,7.9104480208786425,48.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 0,wip_per_bin,0.0,0.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 20,parts_per_bin,9.796507177033494,72.0,516.0,False,50,12.0
+s4,S4 condition-based capacity 20,wip_per_bin,40.531065603204596,432.0,516.0,False,50,12.0

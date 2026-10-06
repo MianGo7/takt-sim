@@ -1,10 +1,11 @@
 import dataclasses
 import json
 
+import pandas as pd
 import pytest
 
 from takt.analysis import replication_table, summary_table
-from takt.cli import main
+from takt.cli import _all, main
 from takt.config import BufferConfig, LineConfig, reference_line_with_degradation
 from takt.experiment import (
     ExperimentConfig,
@@ -135,3 +136,43 @@ def test_command_runs_an_experiment_and_writes_its_tables_and_definition(tmp_pat
     }
     assert json.loads((folder / "definition.json").read_text())["seed"] == 2026
     assert "parts_produced" in capsys.readouterr().out
+
+
+def test_a_scenario_with_a_threshold_cannot_be_run_without_it(tmp_path):
+    with pytest.raises(SystemExit, match="--threshold"):
+        main(["--out", str(tmp_path), "--workers", "1", "run", "s3"])
+
+
+def test_the_command_for_the_report_writes_every_table_and_figure(tmp_path, capsys):
+    def short(config: ExperimentConfig) -> ExperimentConfig:
+        return dataclasses.replace(config, replications=2, warmup_h=20.0, run_length_h=200.0)
+
+    _all(tmp_path / "figures", tmp_path / "results", workers=1, adjust=short)
+
+    written = {p.name for p in (tmp_path / "figures").iterdir()}
+    assert written == {
+        "validation-s1.csv",
+        "validation-s1-summary.csv",
+        "s0-summary.csv",
+        "s1-summary.csv",
+        "s2-summary.csv",
+        "s2-vs-s1.csv",
+        "s2-vs-published.csv",
+        "s2-threshold.pdf",
+        "s2-threshold.png",
+        "s3-summary.csv",
+        "s3-vs-s1.csv",
+        "s3-signal.pdf",
+        "s3-signal.png",
+        "s4-summary.csv",
+        "s4-condition-based-vs-run-to-failure.csv",
+        "s4-buffer.pdf",
+        "s4-buffer.png",
+        "warmup-check.csv",
+    }
+    published = pd.read_csv(tmp_path / "figures" / "s2-vs-published.csv")
+    assert published.groupby("scenario")["highest_quality"].first().sum() == 1
+    transient = pd.read_csv(tmp_path / "figures" / "warmup-check.csv")
+    assert set(transient["experiment"]) == {"s1", "s2", "s3", "s4"}
+    assert "setting of S3 and S4" in capsys.readouterr().out
+    assert (tmp_path / "results" / "s4" / "definition.json").exists()

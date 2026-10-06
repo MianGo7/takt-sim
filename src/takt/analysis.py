@@ -105,13 +105,26 @@ def flatten(indicators: LineIndicators) -> dict[str, float]:
     }
 
 
+SETTING_PREFIX = "setting_"
+KEY_INDICATORS = (
+    "parts_produced",
+    "mean_lead_time_h",
+    "mean_wip_parts",
+    "availability_mean",
+    "repairs_mean",
+    "mean_quality",
+    "parts_scrapped",
+)
+
+
 def replication_table(results: Sequence[ReplicationResult]) -> pd.DataFrame:
-    """One row per replication with a column per indicator."""
+    """One row per replication with a column per setting and per indicator."""
     rows = [
         {
             "scenario": r.scenario,
             "replication": r.replication,
             "seed": r.seed,
+            **{f"{SETTING_PREFIX}{name}": value for name, value in r.settings},
             **flatten(r.indicators),
         }
         for r in results
@@ -122,7 +135,12 @@ def replication_table(results: Sequence[ReplicationResult]) -> pd.DataFrame:
 def summary_table(results: Sequence[ReplicationResult]) -> pd.DataFrame:
     """One row per scenario and indicator with the mean and its confidence interval."""
     table = replication_table(results)
-    indicator_columns = [c for c in table.columns if c not in ("scenario", "replication", "seed")]
+    setting_columns = [c for c in table.columns if c.startswith(SETTING_PREFIX)]
+    indicator_columns = [
+        c
+        for c in table.columns
+        if c not in ("scenario", "replication", "seed") and c not in setting_columns
+    ]
     rows = []
     for scenario, group in table.groupby("scenario", sort=False):
         for column in indicator_columns:
@@ -130,6 +148,7 @@ def summary_table(results: Sequence[ReplicationResult]) -> pd.DataFrame:
             rows.append(
                 {
                     "scenario": scenario,
+                    **{c: group[c].iloc[0] for c in setting_columns},
                     "indicator": column,
                     "mean": e.mean,
                     "half_width": e.half_width,
@@ -298,3 +317,99 @@ def compare_with_published(
             }
         )
     return pd.DataFrame(rows)
+
+
+def paired_difference(
+    results: Sequence[ReplicationResult],
+    reference: Sequence[ReplicationResult],
+    scenario: str,
+    reference_scenario: str,
+    indicator: str,
+) -> Estimate:
+    """Return the mean difference of an indicator between two scenarios with its interval.
+
+    The scenarios run with the same seed in every replication (ADR-0011), so
+    the difference is taken per replication and the interval is that of the
+    differences. Common random numbers make it narrower than the interval of
+    two independent runs. Implements FR12.
+    """
+    own = {r.replication: r for r in results if r.scenario == scenario}
+    other = {r.replication: r for r in reference if r.scenario == reference_scenario}
+    if own.keys() != other.keys():
+        raise ValueError(f"{scenario} and {reference_scenario} need the same replications")
+    differences = []
+    for replication, result in own.items():
+        if result.seed != other[replication].seed:
+            raise ValueError(f"replication {replication} uses different seeds")
+        differences.append(
+            flatten(result.indicators)[indicator]
+            - flatten(other[replication].indicators)[indicator]
+        )
+    return estimate(differences)
+
+
+def paired_table(
+    results: Sequence[ReplicationResult],
+    reference: Sequence[ReplicationResult],
+    pairs: Sequence[tuple[str, str]],
+    indicators: Sequence[str] = KEY_INDICATORS,
+) -> pd.DataFrame:
+    """Paired differences for pairs of a scenario and its reference scenario.
+
+    A difference is marked as clear when its confidence interval does not
+    contain zero.
+    """
+    settings = {r.scenario: r.settings for r in results}
+    rows = []
+    for scenario, reference_scenario in pairs:
+        for indicator in indicators:
+            e = paired_difference(results, reference, scenario, reference_scenario, indicator)
+            rows.append(
+                {
+                    "scenario": scenario,
+                    **{f"{SETTING_PREFIX}{name}": value for name, value in settings[scenario]},
+                    "reference": reference_scenario,
+                    "indicator": indicator,
+                    "mean_difference": e.mean,
+                    "half_width": e.half_width,
+                    "lower": e.lower,
+                    "upper": e.upper,
+                    "n": e.n,
+                    "clear": not e.lower <= 0.0 <= e.upper,
+                    "confidence_level": CONFIDENCE_LEVEL,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def difference_table(
+    results: Sequence[ReplicationResult],
+    reference: Sequence[ReplicationResult],
+    reference_scenario: str,
+    indicators: Sequence[str] = KEY_INDICATORS,
+) -> pd.DataFrame:
+    """Paired differences of every scenario from one reference scenario."""
+    pairs = [(name, reference_scenario) for name in dict.fromkeys(r.scenario for r in results)]
+    return paired_table(results, reference, pairs, indicators)
+
+
+def best_scenario(summary: pd.DataFrame, indicator: str) -> str:
+    """Name of the scenario with the highest mean of an indicator.
+
+    The scenario that maximises the output answers question 2 of the
+    concept, and the one that maximises the quality is the criterion of the
+    reference case (ADR-0015). A tie goes to the scenario that comes first.
+    """
+    rows = summary[summary["indicator"] == indicator]
+    return str(rows.loc[rows["mean"].idxmax(), "scenario"])
+
+
+# Dadfarnia et al. (2023), Table I on p. 421, test scenario {C1, Pi5}, the
+# perfect monitoring system at the setting that maximises the quality. The
+# threshold of that setting is not stated.
+PUBLISHED_C1_PERFECT_MONITORING = (
+    PublishedValue("availability_mean", 0.6609, 0.09729, "machines", 0.00005),
+    PublishedValue("repairs_mean", 669.00, 133.812, "machines", 0.005),
+    PublishedValue("parts_produced", 3971.20, 50.869, "replications", 0.005),
+    PublishedValue("mean_quality", 0.79, 0.075, "unspecified", 0.005),
+)

@@ -8,7 +8,7 @@ follow from the limited capacity of the buffers.
 import contextlib
 from collections import deque
 from collections.abc import Callable, Generator, Iterator, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 
@@ -484,7 +484,7 @@ class Machine:
                 continue  # A11: paused by a preventive repair, resumed afterwards.
             # A10: the share is added when the cycle completes, with the
             # health at that moment.
-            finished = replace(part, health_sum=part.health_sum + self.health)
+            finished = Part(part.identifier, part.entered_at_h, part.health_sum + self.health)
             part = None
             self._set_working_state(MachineState.BLOCKED)
             self._blocked = True

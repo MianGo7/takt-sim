@@ -7,13 +7,21 @@ period is cut off here, and the model knows nothing about it. Implements
 FR10 to FR12.
 """
 
+import dataclasses
 import math
 from collections.abc import Iterator, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
 
-from takt.config import LineConfig, RunConfig, reference_line_with_degradation
+from takt.config import (
+    BufferConfig,
+    LineConfig,
+    RunConfig,
+    reference_line_condition_based,
+    reference_line_with_degradation,
+)
 from takt.model import LineResult, MachineState, RepairKind, run_line
 
 type Trace[T] = Sequence[tuple[float, T]]
@@ -22,6 +30,11 @@ type Trace[T] = Sequence[tuple[float, T]]
 # the marginal standard error rule finds for the output and the work in
 # progress of S1 (252 hours and 132 hours).
 WARMUP_H = 252.0
+# ADR-0015: the work in progress of a line with large buffers needs longer to
+# reach its steady state. The warm-up of S4 is the largest truncation point
+# found for any of the capacities that were checked (516 hours, the work in
+# progress at a capacity of 20 under S1).
+S4_WARMUP_H = 516.0
 REPLICATIONS = 50  # p. 420
 RUN_LENGTH_H = 10_080.0  # p. 420, the observed period after the warm-up
 DEFAULT_SEED = 2026
@@ -34,10 +47,13 @@ class Scenario:
     Attributes:
         name: Short identifier such as S1.
         line: The line with its degradation and repair settings.
+        settings: The values that the scenario varies, as pairs of name and
+            value, so that the tables and figures can order the scenarios.
     """
 
     name: str
     line: LineConfig
+    settings: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -154,12 +170,14 @@ class ReplicationResult:
         replication: Index of the replication, starting at zero.
         seed: Seed of the replication, equal across scenarios.
         indicators: The indicators over the observed period.
+        settings: The varied values of the scenario.
     """
 
     scenario: str
     replication: int
     seed: int
     indicators: LineIndicators
+    settings: tuple[tuple[str, float], ...] = ()
 
 
 def replication_seeds(root_seed: int, count: int) -> list[int]:
@@ -276,34 +294,86 @@ def binned_series(result: LineResult, bin_h: float) -> tuple[list[float], list[f
         index = int(part.completed_at_h // bin_h)
         if index < bins:
             output[index] += 1.0
-    wip = [
-        math.fsum(
-            level * duration_h
-            for trace in result.buffer_level_traces
-            for level, duration_h in _segments(trace, i * bin_h, (i + 1) * bin_h)
-        )
-        / bin_h
-        for i in range(bins)
-    ]
-    return output, wip
+    area = [0.0] * bins
+    for trace in result.buffer_level_traces:
+        for level, begin_h, end_h in _spans(trace, result.run_length_h):
+            index = int(begin_h // bin_h)
+            while level and index < bins and index * bin_h < end_h:
+                overlap_h = min(end_h, (index + 1) * bin_h) - max(begin_h, index * bin_h)
+                area[index] += level * overlap_h
+                index += 1
+    return output, [value / bin_h for value in area]
 
 
-def run_experiment(config: ExperimentConfig) -> list[ReplicationResult]:
+def _spans[T](trace: Trace[T], end_h: float) -> Iterator[tuple[T, float, float]]:
+    """Yield each value of a step trace with the interval in which it holds."""
+    ends = [time_h for time_h, _ in trace[1:]] + [end_h]
+    for (begin_h, value), finish_h in zip(trace, ends, strict=True):
+        yield value, begin_h, finish_h
+
+
+def _binned_task(
+    task: tuple[Scenario, int, float, float],
+) -> tuple[list[float], list[float]]:
+    scenario, seed, run_length_h, bin_h = task
+    raw = run_line(scenario.line, RunConfig(run_length_h=run_length_h, seed=seed))
+    return binned_series(raw, bin_h)
+
+
+def transient_series(
+    scenario: Scenario,
+    seed: int,
+    replications: int,
+    run_length_h: float,
+    bin_h: float,
+    workers: int = 1,
+) -> tuple[list[list[float]], list[list[float]]]:
+    """Return the output and work in progress per bin for every replication.
+
+    Both series start at time zero without a warm-up period, as the analysis
+    of the initial transient needs (ADR-0011).
+    """
+    seeds = replication_seeds(seed, replications)
+    tasks = [(scenario, s, run_length_h, bin_h) for s in seeds]
+    workers = min(workers, len(tasks))
+    if workers <= 1:
+        pairs = [_binned_task(task) for task in tasks]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            pairs = list(pool.map(_binned_task, tasks))
+    return [output for output, _ in pairs], [wip for _, wip in pairs]
+
+
+def _run_replication(task: tuple[Scenario, int, int, float, float]) -> ReplicationResult:
+    scenario, replication, seed, warmup_h, end_h = task
+    raw = run_line(scenario.line, RunConfig(run_length_h=end_h, seed=seed))
+    indicators = line_indicators(raw, warmup_h, end_h)
+    return ReplicationResult(scenario.name, replication, seed, indicators, scenario.settings)
+
+
+def run_experiment(config: ExperimentConfig, workers: int = 1) -> list[ReplicationResult]:
     """Run every scenario in every replication and return the indicators.
 
     The seeds are shared by the scenarios, and the warm-up period is simulated
-    and then excluded from the indicators (ADR-0011). Implements FR11 and
-    FR12.
+    and then excluded from the indicators (ADR-0011). Replications are
+    independent, so with more than one worker they run in separate processes,
+    and the results are the same and in the same order as with one worker
+    (ADR-0015). Implements FR11 and FR12.
     """
     seeds = replication_seeds(config.seed, config.replications)
     end_h = config.warmup_h + config.run_length_h
-    results: list[ReplicationResult] = []
-    for scenario in config.scenarios:
-        for replication, seed in enumerate(seeds):
-            raw = run_line(scenario.line, RunConfig(run_length_h=end_h, seed=seed))
-            indicators = line_indicators(raw, config.warmup_h, end_h)
-            results.append(ReplicationResult(scenario.name, replication, seed, indicators))
-    return results
+    tasks = [
+        (scenario, replication, seed, config.warmup_h, end_h)
+        for scenario in config.scenarios
+        for replication, seed in enumerate(seeds)
+    ]
+    workers = min(workers, len(tasks))
+    if workers <= 1:
+        return [_run_replication(task) for task in tasks]
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        return list(
+            pool.map(_run_replication, tasks, chunksize=max(1, len(tasks) // (workers * 4)))
+        )
 
 
 def s0_experiment() -> ExperimentConfig:
@@ -332,8 +402,80 @@ def s1_from_start_experiment() -> ExperimentConfig:
     return ExperimentConfig(name="s1-from-start", scenarios=(scenario,), warmup_h=0.0)
 
 
+S2_THRESHOLDS = tuple(step / 8 for step in range(1, 8))
+S3_DETECTION_PROBABILITIES = (1.0, 0.9, 0.75, 0.5)
+S3_FALSE_ALARM_PROBABILITIES = (0.0, 0.002, 0.01, 0.05)
+S4_BUFFER_CAPACITIES = (0, 1, 2, 5, 10, 15, 20)
+
+
+def s2_experiment() -> ExperimentConfig:
+    """Scenario S2: condition-based maintenance with an ideal signal.
+
+    The alarm threshold takes every health value from 0.125 to 0.875, which
+    answers question 2. Implements FR7.
+    """
+    scenarios = tuple(
+        Scenario(
+            f"S2 threshold {threshold:.3f}",
+            reference_line_condition_based(threshold),
+            (("alarm_threshold", threshold),),
+        )
+        for threshold in S2_THRESHOLDS
+    )
+    return ExperimentConfig(name="s2", scenarios=scenarios)
+
+
+def s3_experiment(threshold: float) -> ExperimentConfig:
+    """Scenario S3: an imperfect signal at the given alarm threshold.
+
+    The detection probability and the false alarm probability form a grid. The
+    corner with an ideal signal is the setting of S2 at the same threshold.
+    Implements FR8.
+    """
+    scenarios = tuple(
+        Scenario(
+            f"S3 detection {detection:.2f} false alarm {false_alarm:.3f}",
+            reference_line_condition_based(threshold, detection, false_alarm),
+            (
+                ("alarm_threshold", threshold),
+                ("detection_probability", detection),
+                ("false_alarm_probability", false_alarm),
+            ),
+        )
+        for detection in S3_DETECTION_PROBABILITIES
+        for false_alarm in S3_FALSE_ALARM_PROBABILITIES
+    )
+    return ExperimentConfig(name="s3", scenarios=scenarios)
+
+
+def _with_buffer_capacity(line: LineConfig, capacity_parts: int) -> LineConfig:
+    return dataclasses.replace(
+        line, buffers=tuple(BufferConfig(capacity_parts) for _ in line.buffers)
+    )
+
+
+def s4_experiment(threshold: float) -> ExperimentConfig:
+    """Scenario S4: the buffer capacity under S1 and under the given S2 setting."""
+    policies = (
+        ("run-to-failure", 0.0, reference_line_with_degradation()),
+        ("condition-based", 1.0, reference_line_condition_based(threshold)),
+    )
+    scenarios = tuple(
+        Scenario(
+            f"S4 {name} capacity {capacity}",
+            _with_buffer_capacity(line, capacity),
+            (("buffer_capacity", float(capacity)), ("condition_based", flag)),
+        )
+        for name, flag, line in policies
+        for capacity in S4_BUFFER_CAPACITIES
+    )
+    return ExperimentConfig(name="s4", scenarios=scenarios, warmup_h=S4_WARMUP_H)
+
+
 EXPERIMENTS = {
     "s0": s0_experiment,
     "s1": s1_experiment,
     "s1-from-start": s1_from_start_experiment,
+    "s2": s2_experiment,
 }
+THRESHOLD_EXPERIMENTS = {"s3": s3_experiment, "s4": s4_experiment}
