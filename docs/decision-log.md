@@ -474,3 +474,71 @@ agree was rejected as a method; a deviation is reported and examined.
 rows with a stand-in standard error are indicative. The quality row cannot be
 judged by its z value, because the rounding of the paper is larger than the
 standard error of the model, and it is judged by the rounding.
+
+---
+
+## ADR-0014: Policy as an object, one work order per machine, and the draws of the monitoring system
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** B6 adds the condition-based policy. The scenarios S1 to S3 have to
+differ in the policy and in nothing else, the work orders of the two policies
+share one queue of maintainers, and the monitoring system draws random numbers
+that must not disturb the degradation of the machines.
+
+**Decision.** A policy is an object with a common interface in `model.py`:
+`RunToFailure`, which creates no work order of its own, and `ConditionBased`,
+which reads every machine at a fixed interval. The configuration holds the
+choice in `LineConfig.policy` as `RunToFailureConfig` or
+`ConditionBasedConfig`, so that a scenario changes that field and nothing else.
+The modules stay single files (ADR-0009).
+
+A machine has at most one open work order (A12). The failure of a machine and
+an alarm both ask the machine for a work order, which is created unless one is
+open. The orders wait in the one first in, first out queue of the maintainers
+(A8). The kind and the duration of the repair are decided when the maintainer
+arrives, from the health at that moment: 20 hours at a health of zero, which is
+corrective, 5 hours above zero and below 0.5, and 2.5 hours from 0.5 upwards
+(A6), both preventive. A machine that fails while its order waits therefore
+receives the corrective repair at the place that its order already holds.
+
+A preventive repair pauses the part in process, which is finished after the
+repair with the remaining cycle time (A11). A machine that is blocked or
+starved at that moment is not interrupted in its wait for a part or a handover,
+and takes no part until the repair has ended. The degradation stops during the
+repair and restarts with new draws when the health is restored. A preventive
+repair counts as downtime in the availability, which is the definition of the
+reference case (p. 419).
+
+The first reading is one sensing interval after the start. At every reading one
+uniform number is drawn from the sensor stream of each machine, whatever the
+health, the threshold, or the open work orders. A reading at or below the
+threshold raises an alarm if the number is below the detection probability, and
+a reading above it raises an alarm if the number is below the false alarm
+probability. Only an alarm that creates a work order is recorded. The sensor
+stream is the second child of the machine stream and the degradation stream the
+first, so that the degradation of a machine is the same as before this item.
+
+**Alternatives.** A separate corrective order created at the failure was
+rejected because the machine would lose the place that its alarm gave it, and
+the paper lets the waiting order serve the failure (p. 418). A priority of
+corrective repairs over preventive ones was rejected because the paper names no
+priority rule (A8). Restarting the cycle after a preventive repair was rejected
+because it would add work to a part that the paper does not scrap, and scrapping
+the paused part was rejected because the paper scraps nothing (p. 419). Drawing
+a number only when the reading is at or below the threshold was rejected
+because the use of the stream would then depend on the health and on the
+policy, so that two scenarios with the same seed would see different sensor
+errors. Putting the policy in a package of its own was rejected as premature
+for two small classes.
+
+**Consequences.** A threshold below the smallest health that is not zero and a
+signal that never raises an alarm reproduce S1 exactly, which the tests check by
+equality of the complete raw output for three seeds. The tables of the
+validation of S1 were produced again after the change and are identical. The
+common random numbers hold for the degradation up to the first preventive
+repair of a machine, and from there on only for the sensor errors, because the
+later degradation events of the repaired machine shift (ADR-0011). The
+influence of A11 and A12 on S2 and S3 is not examined yet, and the comparison of
+S2 with the perfect monitoring system of the paper, which publishes one setting
+only, belongs to B7.

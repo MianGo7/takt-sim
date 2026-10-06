@@ -119,7 +119,7 @@ Documents to update: `requirements.md` (NFR2, NFR3), `dev-journal.md`.
 
 ## B6: Condition-based maintenance
 
-Status: open.
+Status: done.
 
 Scope: the monitoring system with its sensing interval and alarm threshold,
 the preventive repair with its health dependent duration, and the signal

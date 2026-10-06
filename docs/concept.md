@@ -125,6 +125,15 @@ The cycle time follows from two statements on p. 420: the cycle times of all
 machines on a path add up to 6 hours, and they are equal within a
 configuration.
 
+Variables of the extension. They are not taken from the reference case and
+are the quantities that the scenarios S2 and S3 vary (ADR-0006, ADR-0014).
+
+| Variable | Ideal value | Range | Unit | Basis |
+| --- | --- | --- | --- | --- |
+| Alarm threshold | not applicable | 0.125 to 0.875 in steps of 0.125 | health | scenario variable of S2, no source |
+| Detection probability, a reading at or below the threshold raises an alarm | 1 | 0 to 1 | probability | scenario variable of S3, no source |
+| False alarm probability, a reading above the threshold raises an alarm | 0 | 0 to 1 | probability | scenario variable of S3, no source |
+
 Rules taken from the reference case:
 
 - A machine that fails stops, accepts no further parts, and scraps the part it
@@ -155,6 +164,8 @@ a decision of this project and is examined again in the validation, B5.
 | A8 | Work orders are served in the order of their creation, and a failed machine has no priority over a planned repair. | The paper describes a queue without a priority rule (p. 415). |
 | A9 | A failure scraps only a part that is in process. A part that has finished processing and waits for buffer space is handed over, and a machine that fails while starved has taken no part. | The paper scraps the part in process (p. 417) and does not say what happens to a finished part held by a blocked machine. |
 | A10 | A machine adds its share of quality when it completes the cycle, with the health at that moment, and the quality of a part is the mean of these health values over all machines. | The paper multiplies the share by the health without saying at which point of the cycle it is read (p. 416). The completion is the moment at which the share is added, and a degradation event inside the cycle is part of the condition under which the part was finished. |
+| A11 | A preventive repair pauses the part in process, which keeps the work already done and is finished after the repair with the remaining cycle time. | The paper pauses the machine and scraps nothing (p. 419) and does not say how the cycle is resumed. |
+| A12 | A machine has at most one open work order. An alarm for a machine with an open order is ignored, and a machine that fails while its order waits keeps the order and its place in the queue, which then calls for the corrective repair. | The paper lets a machine that fails while its work order waits receive the corrective repair (p. 418) and does not say whether a second order is created. |
 
 ## Analytic expectation
 

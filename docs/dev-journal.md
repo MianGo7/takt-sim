@@ -331,3 +331,77 @@ it does not validate the condition-based policy, which has no published
 counterpart in the model.
 
 **Next.** B6, condition-based maintenance.
+
+## 2026-10-06 (sixth entry)
+
+**Worked on.** Backlog item B6, condition-based maintenance. The configuration
+holds the policy as `RunToFailureConfig` or `ConditionBasedConfig` in the line,
+with the alarm threshold, the sensing interval of one hour, and the detection
+and false alarm probabilities, and the repair configuration now has the three
+repair times by health class. In the model, a policy is an object with a common
+interface. `ConditionBased` reads every machine once per interval and draws one
+number per machine and reading from a new sensor stream. A machine has at most
+one open work order, which the failure or an alarm creates, and the maintainers
+serve the orders in the order of creation. The kind and duration of the repair
+follow from the health at the start: 20 hours at zero, 5 hours below 0.5, and
+2.5 hours from 0.5 upwards. A preventive repair pauses the part in process,
+which resumes with its remaining cycle time. The indicators gained the
+preventive repairs and the true and false alarms, and the count of failures by
+state now comes from a record kept by the machine, because the state trace can
+no longer tell a failure from the start of a preventive repair. The activity
+diagram of the two policies is new, and the state diagram has a note on the
+pause and on the naming of the repair state. The suite has 125 tests and passes
+together with the static checks.
+
+**Decisions.** The policy interface, the one order per machine, the rule that a
+waiting order serves a failure, the pause of the part, and the draws of the
+monitoring system are in ADR-0014, with the new assumptions A11 and A12 in
+`concept.md`. The three variables of the extension are listed there as
+scenario variables without a source.
+
+**Checks.** An ideal signal with a threshold of zero and a signal that never
+raises an alarm give exactly the raw output of S1 for three seeds, compared by
+equality of the complete result. The validation tables of B5 were produced again
+after the change. The comparison is unchanged, and the summary has the same
+values for all existing rows and 18 new ones for the preventive repairs and the
+alarms, all zero for S1. The tests also show that a machine with a pending order
+keeps producing and is repaired when the maintainer is free, that a machine that
+fails while its order waits receives the 20 hour repair at the place of its
+order, that a false alarm repairs a healthy machine in 2.5 hours and scraps
+nothing, that the share of readings that raise an alarm matches the two
+probabilities within four standard deviations, and that every released part is
+accounted for with preventive repairs and false alarms.
+
+**Problems.** Four of the new tests failed at first, and the expectations were
+wrong in each case. Three put an event of the degradation at an integer hour
+that coincides with a reading of the monitoring system, so that the order of the
+two decided the result, and the scales of the degradation were changed to avoid
+the tie. Two of those three also looked for the record of a repair that had not
+ended, because a repair is recorded only when it is complete. The fourth was a
+wrong belief and not a slip of timing: the test assumed that the monitoring
+lowers the availability, as in the perfect monitoring row of the reference case.
+At a threshold of 0.5 the availability of the model is higher than under the run
+to failure, because a repair of 2.5 or 5 hours replaces one of 20 hours. The
+assertion had no basis in the specification and was removed, and the other
+assertions of that test remain.
+
+A first look at S2, with five replications at three thresholds, was not recorded
+and is not a result. It raised a question for B7. By hand, an ideal signal at the
+highest threshold alarms at the first degradation event of a machine, which is
+10.8 hours on average for a regular machine and 3.2 for M3, and repairs it in 2.5
+hours. That gives about 880 repairs per machine and an availability near 78
+percent. The model agrees with this calculation. The perfect monitoring row of
+the reference case has 669 repairs and 66.09 percent availability (p. 421), which
+would need an average downtime of about 5 hours per repair, and its mean quality
+of 0.79 is far below what the model gives at a high threshold. The paper
+publishes only the setting with the highest quality and does not say which it is
+or on which scale the threshold lies, so the difference may come from that, from
+the classification of the repair time, or from the quality. It is not resolved,
+and B7 has to examine it with a recorded run before S2 is interpreted.
+
+**Limits.** The influence of A11 and A12 on S2 and S3 has not been examined. The
+common random numbers hold for the degradation of a machine only up to its first
+preventive repair (ADR-0014). The signal is a pair of error rates and not a
+measurement, so the model cannot say how a real sensor would produce them.
+
+**Next.** B7, experiments and results.
