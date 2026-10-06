@@ -153,6 +153,7 @@ a decision of this project and is examined again in the validation, B5.
 | A6 | A health of exactly 0.5 is repaired in 2.5 hours. | The paper assigns 0.5 to both repair classes (p. 419). |
 | A7 | The source offers one part per hour and waits when the first machine cannot accept it. No part is lost in front of the line. | The paper gives the rate only (p. 420). |
 | A8 | Work orders are served in the order of their creation, and a failed machine has no priority over a planned repair. | The paper describes a queue without a priority rule (p. 415). |
+| A9 | A failure scraps only a part that is in process. A part that has finished processing and waits for buffer space is handed over, and a machine that fails while starved has taken no part. | The paper scraps the part in process (p. 417) and does not say what happens to a finished part held by a blocked machine. |
 
 ## Analytic expectation
 

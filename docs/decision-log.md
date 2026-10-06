@@ -269,3 +269,54 @@ draws from the streams. In B3 each machine will need several streams, one per
 source of randomness, so the list of generators becomes one record per
 machine.
 
+
+---
+
+## ADR-0010: Failure by interruption, health as a step count, and streams per machine and source
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** B3 adds the degradation, the failure, and the corrective repair.
+Three points are open. A failure has to stop a machine that is waiting for a
+part or processing one, the health has to be exact, and the random number
+streams have to stay independent when a source of randomness is added. The
+reference case scraps the part in process at a failure (p. 417) and is
+silent on a machine that is starved or blocked at that moment.
+
+**Decision.** The health is stored as the integer number of remaining steps
+and exposed as that number divided by eight, which is exact. A second process
+per machine draws the Weibull intervals, lowers the health, and on reaching
+zero sets the failed flag and requests a maintainer through a first in, first
+out SimPy resource with the number of maintainers as its capacity (A8). The
+process of the machine is interrupted when it is waiting for a part or
+processing one. A part held at that moment is scrapped, and a withdrawn wait
+takes no part. A machine that is blocked is not interrupted: its finished part
+is handed over first, and the machine then waits for the repair (A9). A part
+that a buffer hands over at the very instant of the failure belongs to the
+machine and is scrapped, so that no part disappears without a count. The
+degradation continues in clock time while the machine is starved or blocked
+(A2) and stops while it is failed. The streams are one record per machine
+with one generator per source of randomness. Each machine receives a child of
+the root `SeedSequence` by its position, and its sources are children of that
+child, so that the stream of a machine depends on the seed and the position
+only. B6 adds the generator for the sensor errors to the record.
+
+**Alternatives.** Storing the health as a float and subtracting the step was
+rejected because the exactness then rests on the step being a power of two,
+which the integer makes independent of the value. Checking the failed flag at
+the start of every cycle instead of interrupting was rejected because a
+machine would continue a cycle and release a part after it had failed, and a
+starved machine would take a part during its repair. Scrapping the finished
+part of a blocked machine was rejected because the part has left the
+processing step, and scrapping it would add a loss that the reference case
+does not describe. Spawning the streams of all machines from one parent
+without the second level was rejected because the next source of randomness
+would then shift the streams of the following machines.
+
+**Consequences.** The throughput of S1 depends on A9 whenever a machine fails
+while it is blocked, and B5 examines this together with A1 to A8. A tie
+between a failure and a handover is resolved in favour of the failure, which
+has probability zero for continuous Weibull intervals and is tested only by
+its construction. The policy interface of the architecture is introduced in
+B6, when there is a second policy to exchange, and the corrective repair is
+until then part of the maintainers.

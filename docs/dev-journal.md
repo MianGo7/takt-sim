@@ -115,3 +115,45 @@ belongs to B5 and needs a rendezvous between two machines.
 
 **Next.** B3, degradation, failure, and corrective repair.
 
+
+## 2026-10-06 (third entry)
+
+**Worked on.** Backlog item B3, degradation, failure, and corrective repair.
+The configuration gained the Weibull parameters per machine, the number of
+maintainers, and the corrective repair time, all from the parameter table, and
+a function that builds the reference line with degradation for scenario S1. A
+machine without degradation settings never degrades, so that S0 keeps its
+exact output. In the model, a second process per machine draws the intervals
+between degradation events and lowers the health in steps of one eighth, the
+failure scraps the part in process, and a pool of three maintainers repairs
+the failed machines for 20 hours in the order of the failures. The tests cover
+the nine health values in order, the restoration of the health, the scrapped
+part, the refusal of parts during the repair, a machine that fails while
+starved and one that fails while blocked, the wait of a fourth simultaneous
+failure and the order of service, the conservation of parts, and the
+independence of the streams. The suite has 46 tests and passes together with
+the static checks. A plausibility run of S1 over ten seeds gave about 93 to 94
+repairs for each regular machine and 221 for M3, close to the analytic values
+of 94.5 and 222.8. It was not recorded as a result, because the verification
+with confidence intervals belongs to B5.
+
+**Decisions.** A failure interrupts the process of a machine through SimPy and
+does not rely on a check at the start of the cycle, which would let a failed
+machine finish a part or take one during its repair. A machine that is blocked
+hands over its finished part before it waits for the repair, and a starved
+machine takes no part. The reference case is silent on both, and the reading
+is the new assumption A9. The health is an integer step count. The streams
+are one record per machine with one generator per source, and the stream of a
+machine depends on the seed and its position only (ADR-0010).
+
+**Problems.** The first run of the new tests failed in four places, and all
+four were errors in the expectations. After a repair the degradation starts
+again at once, so a second failure fell inside the window of three tests and
+the count of repairs and scrapped parts was higher than written down. The
+expectation of the starved machine used the wrong index of the completion
+list. The tests were corrected by working out the failure and repair times
+first. A limit remains: the tie between a failure and a handover of a part at
+the same instant is resolved in favour of the failure and is not exercised by
+a test, because it has probability zero with continuous Weibull intervals.
+
+**Next.** B4, indicators and the experiment runner.

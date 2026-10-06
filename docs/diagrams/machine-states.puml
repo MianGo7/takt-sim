@@ -19,6 +19,10 @@ state Operational {
 Operational --> Operational : degradation event\n[health > 0.125]\n/ health = health - 0.125
 Operational --> Operational : alarm\n/ create work order
 
+note on link
+  Only a part in process is scrapped. A machine that is blocked hands over its
+  finished part first, and a starved machine has taken none (A9).
+end note
 Operational --> AwaitingRepair : degradation event\n[health = 0.125]\n/ health = 0,\nscrap part in process,\ncreate work order
 AwaitingRepair --> CorrectiveRepair : maintainer available
 CorrectiveRepair --> Operational : after 20 hours\n/ health = 1

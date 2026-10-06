@@ -63,7 +63,7 @@ Documents to update: `requirements.md` (FR1, FR2, NFR1, NFR4, NFR5),
 
 ## B3: Degradation, failure, and corrective repair
 
-Status: open.
+Status: done.
 
 Scope: the health indicator with its random degradation events, the failure
 at a health of zero with the scrapped part, the maintainers with their queue
@@ -107,7 +107,7 @@ analytic availability and repair count in `concept.md`. Validate S1 against
 the published results of the reference case with its run length and number of
 replications. Check the conservation of parts and the extreme cases: a buffer
 of capacity zero, a very large buffer, and a single maintainer. Examine each
-assumption A1 to A8 for its influence on the comparison.
+assumption A1 to A9 for its influence on the comparison.
 
 Done when: every check is an automated test or a recorded comparison, each
 deviation from the published values is explained or recorded as a limit, and

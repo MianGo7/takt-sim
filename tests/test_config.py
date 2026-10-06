@@ -2,7 +2,15 @@ import dataclasses
 
 import pytest
 
-from takt.config import BufferConfig, LineConfig, MachineConfig, RunConfig
+from takt.config import (
+    BufferConfig,
+    DegradationConfig,
+    LineConfig,
+    MachineConfig,
+    RepairConfig,
+    RunConfig,
+    reference_line_with_degradation,
+)
 
 
 def test_default_line_is_the_reference_case():
@@ -62,3 +70,28 @@ def test_run_rejects_a_run_length_that_is_not_positive():
 def test_run_rejects_a_negative_seed():
     with pytest.raises(ValueError, match="seed"):
         RunConfig(seed=-1)
+
+
+def test_default_repair_is_the_reference_case():
+    repair = RepairConfig()
+
+    assert repair.maintainers == 3
+    assert repair.corrective_repair_time_h == 20.0
+
+
+def test_reference_line_with_degradation_gives_machine_three_its_own_weibull_parameters():
+    line = reference_line_with_degradation()
+
+    shapes = [(m.degradation.weibull_shape, m.degradation.weibull_scale_h) for m in line.machines]
+    assert shapes == [(1.5, 12.0), (1.5, 12.0), (0.9, 3.0), (1.5, 12.0), (1.5, 12.0), (1.5, 12.0)]
+
+
+@pytest.mark.parametrize("maintainers", [0, -1])
+def test_repair_rejects_fewer_than_one_maintainer(maintainers):
+    with pytest.raises(ValueError, match="maintainers"):
+        RepairConfig(maintainers=maintainers)
+
+
+def test_degradation_rejects_a_shape_that_is_not_positive():
+    with pytest.raises(ValueError, match="weibull_shape"):
+        DegradationConfig(weibull_shape=0.0, weibull_scale_h=1.0)

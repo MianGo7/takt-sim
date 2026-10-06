@@ -120,7 +120,7 @@ def test_streams_of_different_machines_differ_and_repeat_for_the_same_seed():
     first = spawn_machine_streams(3, 2)
     again = spawn_machine_streams(3, 2)
 
-    draws = [stream.random() for stream in first]
+    draws = [stream.degradation.random() for stream in first]
     assert draws[0] != draws[1]
-    assert draws == [stream.random() for stream in again]
-    assert isinstance(first[0], np.random.Generator)
+    assert draws == [stream.degradation.random() for stream in again]
+    assert isinstance(first[0].degradation, np.random.Generator)
