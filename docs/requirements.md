@@ -9,6 +9,9 @@ test or, for a figure, by the generated file.
 The requirement set was revised in B1 against the reference case in
 `concept.md`. Every later change is recorded in `dev-journal.md`.
 
+Status at the end of B8: FR1 to FR13 and NFR1 to NFR7 are done, and FR14 and
+FR15 are deferred.
+
 Status values: open, in progress, done, partly met, deferred. A deferred
 requirement is specified on purpose but not implemented, and the reason is
 stated next to it.
@@ -42,10 +45,10 @@ examined in depth over five examined superficially.
 
 | ID | Requirement | Status | Implemented in | Verified by |
 | --- | --- | --- | --- | --- |
-| NFR1 | Reproducibility: a run with the same parameters and the same seed produces the same result. | partly met | `config.py` (`RunConfig`), `model.py` (`spawn_machine_streams`, `run_line`) | `tests/test_line.py`: same seed, identical result. Informative from B3: `tests/test_degradation.py` repeats it with degradation, and runs with different seeds differ |
+| NFR1 | Reproducibility: a run with the same parameters and the same seed produces the same result. | done | `config.py` (`RunConfig`), `model.py` (`spawn_machine_streams`, `run_line`), `experiment.py` (`replication_seeds`) | `tests/test_line.py` and `tests/test_degradation.py`: the same seed gives an identical result with and without degradation, different seeds differ. `tests/test_policy.py`: identical raw output for the policy of S1 and a silent policy. `tests/test_scenarios.py`: serial and parallel runs are identical. A fresh clone with a new environment reproduced all 18 files in `docs/figures/` byte for byte (journal, eighth entry) |
 | NFR2 | Verification: without degradation the model produces the exact output of a deterministic line, and under the run-to-failure policy the availability and the repair count of a machine match the analytic values in `concept.md` within the confidence interval. | done | `tests/test_verification.py`, `tests/test_indicators.py`, `experiment.py` | Exact values of S0 in `tests/test_indicators.py`. Single machines with the parameters of M1 and M3 against the analytic availability and repair count, with a tolerance of four standard errors of 100 replications, recorded deviations below 1.7 standard errors (ADR-0013). Exact accounting of released, produced, scrapped, and held parts, the extreme cases, and the limits of the maintainers |
 | NFR3 | Validation: under the run-to-failure policy the model is compared with the published results of the reference case, and every deviation is explained or recorded as a limit. | done | `analysis.py` (`compare_with_published`), `cli.py` (`validate`) | `docs/figures/validation-s1.csv` and `validation-s1-summary.csv`, ADR-0013. The deviations and the limits of the validation are in the journal entry of 2026-10-06 (fifth entry) |
-| NFR4 | Transparency: every parameter is defined in one place, with its unit and its source or the statement that it is an assumption. | partly met | `config.py` | `tests/test_config.py`: defaults equal the parameter table in `concept.md`. The monitoring parameters follow in B6 |
+| NFR4 | Transparency: every parameter is defined in one place, with its unit and its source or the statement that it is an assumption. | done | `config.py` | `tests/test_config.py`: defaults equal the parameter table in `concept.md`, including the repair times and the number of maintainers. The alarm threshold and the two error rates are listed in `concept.md` as variables of the extension without a source |
 | NFR5 | Testability: the rules of the model are covered by automated tests that run without generating figures. | done | `tests/` | `uv run pytest`: the model tests run without files and without Matplotlib |
 | NFR6 | Performance: the complete set of experiments runs in under ten minutes on a current notebook. | done | `experiment.py` (`run_experiment`, `workers`), `cli.py` (`all`) | The complete set, `uv run python -m takt all`, took 6 min 43 s with one worker and 40 s with 18 workers on the machine of the author, see the journal entry of 2026-10-06 (seventh entry) |
 | NFR7 | Maintainability: static checks and the code style check pass without exceptions. | done | `pyproject.toml`, `.github/workflows/tests.yml` | `uv run ruff check`, `uv run ruff format --check` |

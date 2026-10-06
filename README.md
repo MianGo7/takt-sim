@@ -21,6 +21,8 @@ DLBDSESF02, Smart Factory II.
 - Task: Task 3, manufacturing simulation of a smart factory
 - Author: Mian Gohar Ehsan
 - Matriculation number: IU14147184
+- Submitted to: Qaadan, Sahar
+- Type of Thesis: Project Report
 
 ## Purpose of the model
 
@@ -42,6 +44,23 @@ and the performance indicators, is in `docs/concept.md`.
     cd takt-sim
     uv sync
 
+## Run the experiments
+
+    uv run python -m takt all         # every table and figure of the report
+    uv run python -m takt run s1      # one experiment, tables to results/s1
+    uv run python -m takt run s4 --threshold 0.5
+    uv run python -m takt validate    # S1 against the published results
+    uv run python -m takt warmup      # analysis of the initial transient of S1
+
+The command `all` runs the scenarios S0 to S4 with 50 replications each and
+writes the tables and the figures to `docs/figures/`, and the raw replications
+and the definition of every experiment to `results/`, which is not versioned.
+The replications run in parallel, with `--workers` as the number of processes,
+and the result does not depend on that number. The complete set takes about
+40 seconds with 18 processes and 6 minutes and 43 seconds with one on the
+machine of the author. A fresh clone with a new environment reproduces every
+file in `docs/figures/` byte for byte.
+
 ## Checks
 
     uv run pytest             # the test suite
@@ -51,6 +70,12 @@ and the performance indicators, is in `docs/concept.md`.
 ## Project structure
 
     src/takt/           the simulation package
+      config.py         parameters as frozen dataclasses
+      model.py          machines, buffers, maintainers, and the two policies
+      experiment.py     scenarios, replications, and indicators
+      analysis.py       confidence intervals, paired differences, and warm-up analysis
+      plots.py          the figures
+      cli.py            the command line
     tests/              the test suite
 
     docs/

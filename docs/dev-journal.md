@@ -511,3 +511,58 @@ checked are assumed to lie between them. A capacity of zero gives a work in
 progress of zero by the definition of the reference case (ADR-0012).
 
 **Next.** B8, structure diagrams and final review.
+
+## 2026-10-06 (eighth entry)
+
+**Worked on.** Backlog item B8, structure diagrams and final review. The
+component diagram shows the seven modules of the package, the arrows of their
+imports, and the five libraries, and the sequence diagram shows one replication
+from the seeds to the indicators. Both were drawn from the source files and
+render without errors. A new test, `tests/test_diagrams.py`, makes the match
+checkable: the arrows of the component diagram have to equal the imports found in
+the source files by their syntax tree, and every function and class that the
+sequence diagram names has to exist in the code. The README now describes the
+commands, the layout of the package, and the reproduction of the figures. Every
+requirement has its final status: FR1 to FR13 and NFR1 to NFR7 are done, and FR14
+and FR15 stay deferred for the reason given in `requirements.md`. NFR1 and NFR4,
+which were still partly met, are done.
+
+**Fresh clone.** The complete set of experiments was repeated from a fresh clone
+of commit 1fda651 with the changes of this item applied, in a new virtual
+environment created with `uv sync --locked`, and without the folder of raw
+results. The suite of 148 tests and the static checks passed there, and
+`uv run python -m takt all` took 41 seconds with 18 workers. All 18 files in
+`docs/figures/` are identical to the ones in the working tree, byte for byte,
+with the root seed 2026, 50 replications, and the warm-up periods of ADR-0011 and
+ADR-0015.
+
+**Problems.** The committed PDFs carry the date of their creation, for instance
+`D:20261006202927`, so that a repeated run would have written different bytes for
+the same data. This was seen in the committed files and not in a failed
+comparison. The date is now left out of the PDF, the three PDFs of the figures
+were written again, and a test saves the same figure twice, a second apart, and
+compares the bytes. The CSV files and the PNG files did not change. The remaining
+check of the claim that the clone reproduces the figures therefore had to use the
+changes of this item on top of the last commit, which is stated above. A second
+point is a limit of the check: it was made on one machine, with the same
+operating system and the same fonts, and the figures use Arial only where it is
+available, otherwise a substitute font, so that a machine with other fonts may
+draw the figures differently while the tables stay the same.
+
+**Size of the implementation.** The package has 8 files with 2,410 lines, of which
+1,971 are not blank and not comments, with `model.py` at 610, `experiment.py` at
+393, `analysis.py` at 346, `cli.py` at 255, `config.py` at 206, and `plots.py` at
+152. The 13 files of tests have 1,872 lines, of which 1,279 count the same way,
+and hold 148 tests. The repository has 6 diagrams, 15 decision records, and 11
+commits before this item. The count of code lines includes the docstrings.
+
+**Limits of the project.** Three are carried into the report. The condition-based
+policy has no published counterpart that the model reproduces, so S2 to S4 are
+results of the model and not validated, see the journal entry of B7. The model
+covers one configuration and two policies, and the periodic inspection and the
+parallel configurations of the reference case are deferred. The assumptions A3 to
+A5, A11, and A12 were not varied, and the signal is a pair of error rates and not
+a measurement.
+
+**Next.** The report is written from `docs/` and from the files in
+`docs/figures/`, which are complete.

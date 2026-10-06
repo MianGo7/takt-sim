@@ -153,7 +153,7 @@ Documents to update: `requirements.md` (FR13, NFR6), `dev-journal.md`.
 
 ## B8: Structure diagrams and final review
 
-Status: open.
+Status: done.
 
 Scope: the component diagram of the package and the sequence of one
 replication, drawn from the implemented code. Give every requirement a final
