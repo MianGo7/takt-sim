@@ -1,4 +1,5 @@
 import dataclasses
+import time
 
 import matplotlib.pyplot as plt
 import pytest
@@ -66,3 +67,16 @@ def test_the_figure_is_saved_at_300_dots_per_inch_and_closed(tmp_path):
     with Image.open(paths[1]) as image:
         assert image.info["dpi"][0] == pytest.approx(300, abs=1)
     assert not plt.fignum_exists(figure.number)
+
+
+def test_the_same_figure_gives_the_same_files_when_it_is_saved_twice(tmp_path):
+    def draw():
+        figure, ax = plt.subplots(figsize=(2.0, 1.0))
+        ax.plot([0, 1], [0, 1])
+        return figure
+
+    first = save_figure(draw(), tmp_path / "first")
+    time.sleep(1.1)  # a PDF date has a resolution of one second
+    second = save_figure(draw(), tmp_path / "second")
+
+    assert [p.read_bytes() for p in first] == [p.read_bytes() for p in second]

@@ -60,7 +60,10 @@ def save_figure(figure: Figure, base: Path) -> list[Path]:
     base.parent.mkdir(parents=True, exist_ok=True)
     paths = [base.with_suffix(".pdf"), base.with_suffix(".png")]
     for path in paths:
-        figure.savefig(path, dpi=DOTS_PER_INCH, bbox_inches="tight")
+        # The creation date is left out of the PDF, so that the same data give
+        # the same bytes and a repeated run can be compared with the committed file.
+        metadata = {"CreationDate": None} if path.suffix == ".pdf" else None
+        figure.savefig(path, dpi=DOTS_PER_INCH, bbox_inches="tight", metadata=metadata)
     plt.close(figure)
     return paths
 
