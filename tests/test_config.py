@@ -42,9 +42,11 @@ def test_machine_rejects_a_cycle_time_that_is_not_positive_and_finite(cycle_time
         MachineConfig(cycle_time_h=cycle_time_h)
 
 
-def test_buffer_rejects_a_capacity_below_one():
+def test_buffer_rejects_a_negative_capacity_and_accepts_zero():
     with pytest.raises(ValueError, match="capacity_parts"):
-        BufferConfig(capacity_parts=0)
+        BufferConfig(capacity_parts=-1)
+
+    assert BufferConfig(capacity_parts=0).capacity_parts == 0
 
 
 def test_line_rejects_a_buffer_count_that_does_not_match_the_machines():

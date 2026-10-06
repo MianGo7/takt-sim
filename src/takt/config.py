@@ -74,17 +74,16 @@ class BufferConfig:
     Implements FR2.
 
     Attributes:
-        capacity_parts: Number of parts the buffer holds, at least one. A
-            capacity of zero is a rendezvous between two machines and is not
-            supported before B5.
+        capacity_parts: Number of parts the buffer holds. A capacity of zero
+            is a rendezvous between two machines (ADR-0012).
     """
 
     capacity_parts: int = BUFFER_CAPACITY_PARTS
 
     def __post_init__(self) -> None:
         """Validate the capacity."""
-        if self.capacity_parts < 1:
-            raise ValueError(f"capacity_parts must be at least 1, got {self.capacity_parts}")
+        if self.capacity_parts < 0:
+            raise ValueError(f"capacity_parts must not be negative, got {self.capacity_parts}")
 
 
 @dataclass(frozen=True)

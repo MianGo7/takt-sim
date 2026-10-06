@@ -5,6 +5,7 @@ as SimPy processes. Blocking and starvation are not coded as states: they
 follow from the limited capacity of the buffers.
 """
 
+from collections import deque
 from collections.abc import Callable, Generator, Iterator, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
@@ -170,6 +171,62 @@ class Buffer:
         self._record_level()
 
 
+class Handoff:
+    """A buffer of capacity zero: a machine hands over only to a waiting machine.
+
+    The giving machine holds its finished part and is blocked until the
+    receiving machine asks for a part. Nothing waits in the link, so its level
+    is always zero. Implements FR2.
+    """
+
+    capacity_parts = 0
+
+    def __init__(self, env: simpy.Environment) -> None:
+        """Create a link with no waiting machine on either side."""
+        self.level_trace: list[tuple[float, int]] = [(env.now, 0)]
+        self._env = env
+        self._takers: deque[simpy.Event] = deque()
+        self._givers: deque[tuple[Part, simpy.Event]] = deque()
+
+    @property
+    def level_parts(self) -> int:
+        """Number of parts currently waiting, always zero."""
+        return 0
+
+    def take(self) -> Taking:
+        """Wait until the giving machine offers a part and return it."""
+        arrival = self._env.event()
+        if self._givers:
+            part, released = self._givers.popleft()
+            released.succeed()
+            arrival.succeed(part)
+        else:
+            self._takers.append(arrival)
+        try:
+            part = yield arrival
+        except simpy.Interrupt:
+            # The same rule as for the buffer: a part that is already handed
+            # over belongs to the caller, otherwise the wait is withdrawn.
+            if not arrival.triggered:
+                self._takers.remove(arrival)
+                raise
+            return arrival.value
+        return part
+
+    def accept(self, part: Part) -> Steps:
+        """Wait until the receiving machine has taken the part."""
+        released = self._env.event()
+        if self._takers:
+            self._takers.popleft().succeed(part)
+            released.succeed()
+        else:
+            self._givers.append((part, released))
+        yield released
+
+
+type Link = Buffer | Handoff
+
+
 class Sink:
     """Collects the finished parts with their lead time and quality.
 
@@ -288,6 +345,8 @@ class Machine:
         self._failed = False
         self._restored: simpy.Event | None = None
         self._interruptible = False
+        self._holding = False
+        self._blocked = False
         self._env = env
         self._inbound = inbound
         self._outbound = outbound
@@ -305,6 +364,11 @@ class Machine:
     def parts_scrapped(self) -> int:
         """Number of parts scrapped by failures of this machine."""
         return len(self.scrap_times_h)
+
+    @property
+    def holding_part(self) -> bool:
+        """Whether a part is in process or finished and waiting to be handed over."""
+        return self._holding
 
     @property
     def failed(self) -> bool:
@@ -330,6 +394,7 @@ class Machine:
             self._interruptible = True
             try:
                 part = yield from self._inbound.take()
+                self._holding = True
                 if not self._failed:
                     self._set_state(MachineState.PROCESSING)
                 yield self._env.timeout(self.cycle_time_h)
@@ -341,13 +406,17 @@ class Machine:
                 # that was starved took no part and has nothing to scrap.
                 if part is not None:
                     self.scrap_times_h.append(self._env.now)
+                    self._holding = False
                 continue
             assert part is not None
             # A10: the share is added when the cycle completes, with the
             # health at that moment.
             part = replace(part, health_sum=part.health_sum + self.health)
             self._set_state(MachineState.BLOCKED)
+            self._blocked = True
             yield from self._outbound.accept(part)
+            self._blocked = False
+            self._holding = False
 
     def _degrade(self) -> Steps:
         assert self._degradation is not None
@@ -365,6 +434,10 @@ class Machine:
             self._remaining_steps = HEALTH_STEPS
             self.health_trace.append((self._env.now, self.health))
             self._failed = False
+            if self._blocked:
+                # A9: the machine still holds its finished part, so after the
+                # repair it is blocked and not starved.
+                self._set_state(MachineState.BLOCKED)
             restored, self._restored = self._restored, None
             assert restored is not None
             restored.succeed()
@@ -410,7 +483,10 @@ class Line:
             )
         self.source = Source(env, config.arrival_interval_h)
         self.sink = Sink(env, len(config.machines))
-        self.buffers = [Buffer(env, buffer) for buffer in config.buffers]
+        self.buffers: list[Link] = [
+            Handoff(env) if buffer.capacity_parts == 0 else Buffer(env, buffer)
+            for buffer in config.buffers
+        ]
         self.maintainers = Maintainers(env, config.repair)
         suppliers: list[PartSupplier] = [self.source, *self.buffers]
         receivers: list[PartReceiver] = [*self.buffers, self.sink]
