@@ -346,8 +346,8 @@ class Machine:
 
     A machine that cannot hand over its finished part holds it and is blocked,
     and a machine without a part waits and is starved. The health is held as
-    a number of remaining steps, so that it is exact (ADR-0010).
-    A failure scraps the part in process. A preventive repair
+    a number of remaining steps, so that it is exact (ADR-0010). A failure
+    scraps the part in process. A preventive repair
     pauses the part in process and scraps nothing (A11). In both cases the
     machine takes no further part until the repair has ended. A machine has at
     most one open work order (A12). Implements FR1 to FR7.

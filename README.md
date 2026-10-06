@@ -40,7 +40,7 @@ and the performance indicators, is in `docs/concept.md`.
 
 ## Set up and run
 
-    git clone <repository url>
+    git clone https://github.com/MianGo7/takt-sim.git
     cd takt-sim
     uv sync
 
