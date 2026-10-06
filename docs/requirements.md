@@ -25,10 +25,10 @@ stated next to it.
 | FR6 | The repair time depends on the health of the machine at the start of the repair, in the three classes of the reference case. | open | | |
 | FR7 | Under condition-based maintenance a monitoring system reads the health of every machine at a fixed interval and creates a work order at or below an alarm threshold. The machine produces until the maintainer arrives. | open | | |
 | FR8 | The quality of the sensor signal is configurable through the probability that a reading at or below the threshold raises an alarm and the probability that a reading above it raises a false alarm. | open | | |
-| FR9 | Every machine adds its share of quality to a part in proportion to its health at the time of processing. | open | | |
-| FR10 | The model records the performance indicators listed in `concept.md`. | open | | |
-| FR11 | An experiment runs a scenario in several independent replications and reports means with confidence intervals. | open | | |
-| FR12 | The scenarios of an experiment use common random numbers, so that they are compared under identical conditions. | open | | |
+| FR9 | Every machine adds its share of quality to a part in proportion to its health at the time of processing. | done | `model.py` (`Part`, `CompletedPart`, `Machine`, `Sink`), ADR-0011, A10 | `tests/test_indicators.py`: a part through six healthy machines has a quality of one, and the share follows the health at the end of the cycle |
+| FR10 | The model records the performance indicators listed in `concept.md`. | done | `experiment.py` (`line_indicators`, `LineIndicators`, `MachineIndicators`), `model.py` (traces in `LineResult`) | `tests/test_indicators.py`: exact values for the deterministic line, the window, and the time shares. The agreement of S1 with the published values is checked in B5 |
+| FR11 | An experiment runs a scenario in several independent replications and reports means with confidence intervals. | done | `experiment.py` (`run_experiment`), `analysis.py` (`estimate`, `summary_table`), `cli.py` | `tests/test_analysis.py`: interval against a table value and coverage of about 95 percent. `tests/test_experiment.py`: repetition from the definition and the written tables |
+| FR12 | The scenarios of an experiment use common random numbers, so that they are compared under identical conditions. | done | `experiment.py` (`replication_seeds`) | `tests/test_experiment.py`: equal seeds across scenarios and identical availability for scenarios that differ only in the buffers |
 | FR13 | The results are written as tables and figures that the report can use directly. | open | | |
 | FR14 | A periodic inspection policy inspects every machine at a fixed interval and orders a repair below a health threshold. | deferred | | |
 | FR15 | The model supports configurations with parallel machines and several part paths. | deferred | | |

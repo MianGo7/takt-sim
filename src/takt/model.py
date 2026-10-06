@@ -5,8 +5,9 @@ as SimPy processes. Blocking and starvation are not coded as states: they
 follow from the limited capacity of the buffers.
 """
 
-from collections.abc import Generator, Iterator, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Generator, Iterator, Sequence
+from dataclasses import dataclass, replace
+from enum import Enum
 from typing import Any, Protocol
 
 import numpy as np
@@ -32,10 +33,43 @@ class Part:
     Attributes:
         identifier: Running number in the order of entry.
         entered_at_h: Time in hours at which the part entered the first machine.
+        health_sum: Sum of the health values that the machines had when they
+            finished the part. The quality is this sum divided by the number
+            of machines (A10), which is exact for a healthy line.
     """
 
     identifier: int
     entered_at_h: float
+    health_sum: float = 0.0
+
+
+@dataclass(frozen=True)
+class CompletedPart:
+    """A part that reached the sink, as recorded for the indicators.
+
+    Attributes:
+        completed_at_h: Time in hours at which the part reached the sink.
+        lead_time_h: Time in hours from entering the first machine to the sink.
+        quality: Product quality between 0 and 1. Implements FR9.
+    """
+
+    completed_at_h: float
+    lead_time_h: float
+    quality: float
+
+
+class MachineState(Enum):
+    """What a machine is doing, as recorded for the time shares.
+
+    A machine that is failed and still hands over a finished part is recorded
+    as awaiting repair (A9).
+    """
+
+    PROCESSING = "processing"
+    STARVED = "starved"
+    BLOCKED = "blocked"
+    AWAITING_REPAIR = "awaiting_repair"
+    UNDER_REPAIR = "under_repair"
 
 
 class PartSupplier(Protocol):
@@ -93,12 +127,25 @@ class Buffer:
     def __init__(self, env: simpy.Environment, config: BufferConfig) -> None:
         """Create an empty buffer."""
         self.capacity_parts = config.capacity_parts
+        self.level_trace: list[tuple[float, int]] = [(env.now, 0)]
+        self._env = env
         self._store = simpy.Store(env, capacity=config.capacity_parts)
 
     @property
     def level_parts(self) -> int:
         """Number of parts currently waiting."""
         return len(self._store.items)
+
+    def _record_level(self) -> None:
+        # Every change of the level is followed by the resumption of the
+        # process that caused it, so the last record of an instant is final.
+        now = self._env.now
+        level = self.level_parts
+        if self.level_trace[-1][0] == now:
+            self.level_trace.pop()
+        if self.level_trace and self.level_trace[-1][1] == level:
+            return
+        self.level_trace.append((now, level))
 
     def take(self) -> Taking:
         """Wait until a part is waiting and return the oldest one."""
@@ -112,33 +159,45 @@ class Buffer:
             if not request.triggered:
                 request.cancel()
                 raise
+            self._record_level()
             return request.value
+        self._record_level()
         return part
 
     def accept(self, part: Part) -> Steps:
         """Wait until the buffer has a free place and store the part."""
         yield self._store.put(part)
+        self._record_level()
 
 
 class Sink:
-    """Collects the finished parts and the times at which they arrived.
+    """Collects the finished parts with their lead time and quality.
 
-    Implements FR1.
+    Implements FR1 and FR9.
     """
 
-    def __init__(self, env: simpy.Environment) -> None:
-        """Create an empty sink."""
+    def __init__(self, env: simpy.Environment, machine_count: int) -> None:
+        """Create an empty sink for a line of the given number of machines."""
         self._env = env
-        self.completion_times_h: list[float] = []
+        self._machine_count = machine_count
+        self.parts: list[CompletedPart] = []
 
     @property
     def parts_produced(self) -> int:
         """Number of parts that reached the sink."""
-        return len(self.completion_times_h)
+        return len(self.parts)
+
+    @property
+    def completion_times_h(self) -> list[float]:
+        """Arrival time of each part in hours."""
+        return [part.completed_at_h for part in self.parts]
 
     def accept(self, part: Part) -> Steps:
         """Record the arrival of a finished part."""
-        self.completion_times_h.append(self._env.now)
+        now = self._env.now
+        self.parts.append(
+            CompletedPart(now, now - part.entered_at_h, part.health_sum / self._machine_count)
+        )
         return iter(())
 
 
@@ -185,12 +244,13 @@ class Maintainers:
         self._corrective_repair_time_h = config.corrective_repair_time_h
         self.records: list[RepairRecord] = []
 
-    def corrective_repair(self, machine: str) -> Steps:
-        """Wait for a free maintainer and repair the named machine."""
+    def corrective_repair(self, machine: str, on_start: Callable[[], None]) -> Steps:
+        """Wait for a free maintainer, call `on_start`, and repair the named machine."""
         created_at_h = self._env.now
         with self._resource.request() as maintainer:
             yield maintainer
             started_at_h = self._env.now
+            on_start()
             yield self._env.timeout(self._corrective_repair_time_h)
         self.records.append(RepairRecord(machine, created_at_h, started_at_h, self._env.now))
 
@@ -219,8 +279,9 @@ class Machine:
         """Create the machine and start its processes."""
         self.name = name
         self.cycle_time_h = config.cycle_time_h
-        self.parts_scrapped = 0
+        self.scrap_times_h: list[float] = []
         self.health_trace: list[tuple[float, float]] = [(env.now, 1.0)]
+        self.state_trace: list[tuple[float, MachineState]] = [(env.now, MachineState.STARVED)]
         self._degradation = config.degradation
         self._streams = streams
         self._remaining_steps = HEALTH_STEPS
@@ -241,18 +302,36 @@ class Machine:
         return self._remaining_steps / HEALTH_STEPS
 
     @property
+    def parts_scrapped(self) -> int:
+        """Number of parts scrapped by failures of this machine."""
+        return len(self.scrap_times_h)
+
+    @property
     def failed(self) -> bool:
         """Whether the machine waits for or undergoes its corrective repair."""
         return self._failed
+
+    def _set_state(self, state: MachineState) -> None:
+        # An interval of length zero carries no time share, so a state that
+        # is replaced within the same instant is dropped from the trace.
+        now = self._env.now
+        if self.state_trace[-1][0] == now:
+            self.state_trace.pop()
+        if self.state_trace and self.state_trace[-1][1] is state:
+            return
+        self.state_trace.append((now, state))
 
     def _run(self) -> Steps:
         while True:
             if self._restored is not None:
                 yield self._restored
+            self._set_state(MachineState.STARVED)
             part: Part | None = None
             self._interruptible = True
             try:
                 part = yield from self._inbound.take()
+                if not self._failed:
+                    self._set_state(MachineState.PROCESSING)
                 yield self._env.timeout(self.cycle_time_h)
             except simpy.Interrupt:
                 pass  # The failure that caused it has set the failed flag.
@@ -261,9 +340,13 @@ class Machine:
                 # ADR-0010: only a part in process is scrapped. A machine
                 # that was starved took no part and has nothing to scrap.
                 if part is not None:
-                    self.parts_scrapped += 1
+                    self.scrap_times_h.append(self._env.now)
                 continue
             assert part is not None
+            # A10: the share is added when the cycle completes, with the
+            # health at that moment.
+            part = replace(part, health_sum=part.health_sum + self.health)
+            self._set_state(MachineState.BLOCKED)
             yield from self._outbound.accept(part)
 
     def _degrade(self) -> Steps:
@@ -276,7 +359,9 @@ class Machine:
                 self._remaining_steps -= 1
                 self.health_trace.append((self._env.now, self.health))
             self._fail()
-            yield from self._maintainers.corrective_repair(self.name)
+            yield from self._maintainers.corrective_repair(
+                self.name, lambda: self._set_state(MachineState.UNDER_REPAIR)
+            )
             self._remaining_steps = HEALTH_STEPS
             self.health_trace.append((self._env.now, self.health))
             self._failed = False
@@ -287,6 +372,7 @@ class Machine:
     def _fail(self) -> None:
         self._failed = True
         self._restored = self._env.event()
+        self._set_state(MachineState.AWAITING_REPAIR)
         # ADR-0010: a machine that is blocked holds a finished part and is
         # not interrupted, it fails after handing the part over.
         if self._interruptible:
@@ -323,7 +409,7 @@ class Line:
                 f"{len(config.machines)} machines need one stream each, got {len(streams)}"
             )
         self.source = Source(env, config.arrival_interval_h)
-        self.sink = Sink(env)
+        self.sink = Sink(env, len(config.machines))
         self.buffers = [Buffer(env, buffer) for buffer in config.buffers]
         self.maintainers = Maintainers(env, config.repair)
         suppliers: list[PartSupplier] = [self.source, *self.buffers]
@@ -340,23 +426,47 @@ class Line:
 
 @dataclass(frozen=True)
 class LineResult:
-    """Output of one run.
+    """Raw output of one run, from which the indicators are derived.
+
+    The traces carry the time of every change, so that the experiment can
+    cut any window out of them without rerunning the model.
 
     Attributes:
-        parts_produced: Parts that reached the sink before the end of the run.
-        completion_times_h: Arrival time of each produced part in hours.
-        parts_scrapped: Parts scrapped by a failure of a machine.
+        parts: The parts that reached the sink before the end of the run.
+        scrap_times_h: Time of every scrapped part in hours, per machine.
         repairs: The completed repairs in the order of their completion.
+        buffer_level_traces: Per buffer the pairs of time and level, with the
+            level held until the next pair.
+        machine_state_traces: Per machine the pairs of time and state, with
+            the state held until the next pair.
+        run_length_h: Length of the run in hours.
     """
 
-    parts_produced: int
-    completion_times_h: tuple[float, ...]
-    parts_scrapped: int
+    parts: tuple[CompletedPart, ...]
+    scrap_times_h: tuple[tuple[float, ...], ...]
     repairs: tuple[RepairRecord, ...]
+    buffer_level_traces: tuple[tuple[tuple[float, int], ...], ...]
+    machine_state_traces: tuple[tuple[tuple[float, MachineState], ...], ...]
+    run_length_h: float
+
+    @property
+    def parts_produced(self) -> int:
+        """Number of parts that reached the sink."""
+        return len(self.parts)
+
+    @property
+    def completion_times_h(self) -> tuple[float, ...]:
+        """Arrival time of each produced part in hours."""
+        return tuple(part.completed_at_h for part in self.parts)
+
+    @property
+    def parts_scrapped(self) -> int:
+        """Parts scrapped by a failure of a machine."""
+        return sum(len(times) for times in self.scrap_times_h)
 
 
 def run_line(line_config: LineConfig, run_config: RunConfig) -> LineResult:
-    """Simulate the line for the run length and return its output.
+    """Simulate the line for the run length and return its raw output.
 
     Parts still inside the line at the end of the run are not counted
     (ADR-0008). Implements NFR1.
@@ -366,8 +476,10 @@ def run_line(line_config: LineConfig, run_config: RunConfig) -> LineResult:
     line = Line(env, line_config, streams)
     env.run(until=run_config.run_length_h)
     return LineResult(
-        line.sink.parts_produced,
-        tuple(line.sink.completion_times_h),
-        sum(machine.parts_scrapped for machine in line.machines),
-        tuple(line.maintainers.records),
+        parts=tuple(line.sink.parts),
+        scrap_times_h=tuple(tuple(machine.scrap_times_h) for machine in line.machines),
+        repairs=tuple(line.maintainers.records),
+        buffer_level_traces=tuple(tuple(buffer.level_trace) for buffer in line.buffers),
+        machine_state_traces=tuple(tuple(machine.state_trace) for machine in line.machines),
+        run_length_h=run_config.run_length_h,
     )

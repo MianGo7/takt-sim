@@ -320,3 +320,75 @@ has probability zero for continuous Weibull intervals and is tested only by
 its construction. The policy interface of the architecture is introduced in
 B6, when there is a second policy to exchange, and the corrective repair is
 until then part of the maintainers.
+
+---
+
+## ADR-0011: Warm-up by the marginal standard error rule, shared replication seeds, and indicators from traces
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** B4 turns the raw output of a run into indicators and compares
+scenarios over replications. Four points are open. The line starts empty and
+with every machine in perfect health, so the first hours are not
+representative. The scenarios have to see the same random conditions. The
+indicators have to be computed for a window of a run. The quality of a part
+needs a reading of the point of the cycle at which the health is taken. The
+reference case states the run length and the number of replications (p. 420)
+and does not mention a warm-up period.
+
+**Decision.** The model records raw traces: every completed part with its lead
+time and quality, the time of every scrapped part, the level of every buffer
+and the state of every machine at every change, and the completed repairs. The
+experiment cuts the observation window from these traces, so that the warm-up
+period is not a feature of the model. A run simulates the warm-up and then the
+run length of the reference case, 10,080 hours, and the indicators cover only
+the latter. Parts, scrapped parts, and repairs count by the time at which they
+happen, within the half-open window of ADR-0008. The work in progress is the
+time average of the parts in all buffers together, and the availability is the
+share of the time in which a machine is neither awaiting nor under repair.
+
+The length of the warm-up period was decided from an analysis of S1 that is
+run with `uv run python -m takt warmup`. It used 50 replications with the root
+seed 2026, a run of 10,080 hours, bins of 12 hours, and the output and the
+work in progress per bin as series. The series were averaged over the
+replications and smoothed with the moving average of Welch, with a window of
+five bins on each side, for inspection. The truncation point was set with the
+marginal standard error rule (MSER, White, 1997), restricted to the first half
+of the series. It gave 252 hours for the output and 132 hours for the work in
+progress. The warm-up period is the larger of the two, 252 hours, so that both
+series are stationary in the window.
+
+The replication seeds are derived from the root seed with
+`SeedSequence.spawn` and do not depend on the scenario, so that the
+replication r of every scenario uses the same seed and thereby the same
+degradation events of every machine (common random numbers). The quality of a
+part is stored as the sum of the health values of the machines and divided by
+the number of machines at the sink (A10).
+
+**Alternatives.** A truncation point with a relative tolerance around the
+plateau was tried first and rejected. With 50 replications the smoothed series
+still fluctuates by more than two percent, so the rule returned 36 hours for a
+tolerance of ten percent on the output and about 9,400 to 10,000 hours for
+five and two percent. The result then measured the noise and the tolerance,
+not the transient. Reading the point off a plot of the Welch curve alone was
+rejected because the choice cannot be repeated. A run without a warm-up
+period, as in the reference case, was rejected as the default because the
+first hours of S1 differ from the steady state, but it remains available
+through the experiment definition, and B5 compares both against the published
+values. Adding the share of one sixth for each machine as a float was
+rejected because the sum of six of them is not exactly one. Reading the
+health at the start of the cycle was rejected because a degradation event
+inside the cycle then would not reach the part. A warm-up within the model,
+by resetting its counters, was rejected because it would give the model
+knowledge of the experiment.
+
+**Consequences.** A scenario with a different structure may need another
+warm-up period, and the analysis has to be repeated for S2 to S4 if their
+transient differs visibly. S0 is observed from time zero, because its
+indicators are compared with exact values. The common random numbers hold
+across scenarios as long as the draws of a machine are consumed in the same
+order. This is the case for S1 and for scenarios that differ in the buffers.
+It holds only in part once a preventive repair restores the health earlier,
+because the later degradation events of that machine then shift in time. The
+traces use memory in proportion to the number of events, which is acceptable
+at about 120,000 entries per run.

@@ -154,6 +154,7 @@ a decision of this project and is examined again in the validation, B5.
 | A7 | The source offers one part per hour and waits when the first machine cannot accept it. No part is lost in front of the line. | The paper gives the rate only (p. 420). |
 | A8 | Work orders are served in the order of their creation, and a failed machine has no priority over a planned repair. | The paper describes a queue without a priority rule (p. 415). |
 | A9 | A failure scraps only a part that is in process. A part that has finished processing and waits for buffer space is handed over, and a machine that fails while starved has taken no part. | The paper scraps the part in process (p. 417) and does not say what happens to a finished part held by a blocked machine. |
+| A10 | A machine adds its share of quality when it completes the cycle, with the health at that moment, and the quality of a part is the mean of these health values over all machines. | The paper multiplies the share by the health without saying at which point of the cycle it is read (p. 416). The completion is the moment at which the share is added, and a degradation event inside the cycle is part of the condition under which the part was finished. |
 
 ## Analytic expectation
 

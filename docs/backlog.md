@@ -81,7 +81,7 @@ if the state diagram changes, `decision-log.md`, `dev-journal.md`.
 
 ## B4: Indicators and experiment runner
 
-Status: open.
+Status: done.
 
 Scope: the product quality of a part, the recording of all performance
 indicators, independent replications, confidence intervals, and common random

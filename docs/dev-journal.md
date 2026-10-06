@@ -157,3 +157,53 @@ the same instant is resolved in favour of the failure and is not exercised by
 a test, because it has probability zero with continuous Weibull intervals.
 
 **Next.** B4, indicators and the experiment runner.
+
+## 2026-10-06 (fourth entry)
+
+**Worked on.** Backlog item B4, indicators and the experiment runner. The
+model now records raw traces: the completed parts with lead time and quality,
+the times of scrapped parts, the level of every buffer, the state of every
+machine, and the repairs. Every part carries the sum of the health values of
+the machines that finished it, and the sink divides it by the number of
+machines, so that a part from six healthy machines has a quality of exactly
+one. The new `experiment` module defines scenarios and experiments in code,
+derives one seed per replication that is shared by all scenarios, and reduces
+each run to the indicators of the observation window. The new `analysis`
+module computes t-based 95 percent confidence intervals, the summary and
+replication tables, the Welch moving average, and the marginal standard error
+rule. The command `uv run python -m takt run s0` or `run s1` writes the two
+tables and the definition of the experiment as JSON to `results/`. The suite
+has 79 tests and passes together with the static checks. The tests compare
+the indicators of the deterministic line with equality, check the interval
+against a table value and by its coverage over 2,000 samples, and show that
+two scenarios that differ only in the buffers have identical machine
+availability in every replication.
+
+**Decisions.** The warm-up period is 252 hours, decided from the analysis of
+S1 with `uv run python -m takt warmup`: 50 replications, root seed 2026, run
+of 10,080 hours, bins of 12 hours, run on the working tree of this item on top
+of commit ffceb44. The marginal standard error rule gave 252 hours for the
+output per bin and 132 hours for the work in progress per bin, and the larger
+value was taken. The averaged work in progress overshoots to 24.7 parts in
+the bin from 108 to 120 hours against a plateau of 21.9, which is the visible
+sign of a line that starts empty with all machines new. The reading of the
+health for the quality, at the end of the cycle, is the new assumption A10.
+The rejected alternatives are in ADR-0011.
+
+**Problems.** The first rule for the truncation point, a relative tolerance
+around the plateau of the smoothed series, did not work. The result moved
+from 36 hours to over 9,000 hours when the tolerance was changed from ten to
+five percent, because the smoothed series of 50 replications still fluctuates
+by more than the tolerance. The rule was replaced before any value was used,
+and the failed attempt is recorded in ADR-0011. A second correction concerned
+the documents: a script that edited several files stopped at its second edit,
+after the first had been applied, and the remaining edits were redone, so the
+record was checked against the files before it was trusted. A limit that
+follows from the design is that the common random numbers hold only in part
+once a preventive repair shifts the degradation events of a machine (B6).
+S1 over 50 replications takes about six seconds, and the warm-up analysis
+about 40 seconds. A first run of S1 was made to check that the command works.
+Its values are not recorded here, because the comparison with the published
+results belongs to B5 and is made there with its own run.
+
+**Next.** B5, verification and validation.
