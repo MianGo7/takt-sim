@@ -1,0 +1,51 @@
+@startuml replication-sequence
+!include _style.puml
+
+' One replication of one scenario, from the seeds to the indicators, read from
+' run_experiment, run_line, and Line. Names are those of the functions and
+' classes in experiment.py and model.py. With more than one worker, the calls of
+' _run_replication run in separate processes and return in the same order. The
+' policy is ConditionBased or RunToFailure, which has the same interface.
+
+participant "run_experiment" as Exp
+participant "_run_replication" as Rep
+participant "run_line" as Run
+participant "spawn_machine_streams" as Streams
+participant "Environment" as Env
+participant "Line" as Line
+participant "Machine" as Machine
+participant "ConditionBased" as Policy
+participant "Maintainers" as Maint
+participant "line_indicators" as Ind
+
+[-> Exp : run_experiment(config, workers)
+Exp -> Exp : replication_seeds(root seed, replications)
+
+loop every scenario and every replication
+  Exp -> Rep : _run_replication(task)
+  Rep -> Run : run_line(line_config, run_config)
+  Run -> Env : Environment()
+  Run -> Streams : spawn_machine_streams(seed, machines)
+  Streams --> Run : one MachineStreams per machine
+  Run -> Line : Line(env, config, streams)
+  Line -> Maint : Maintainers(env, repair configuration)
+  Line -> Machine : Machine(...) for every machine,\nstarts _run and _degrade
+  Line -> Policy : start()
+  Run -> Env : run(until the end of the run)
+
+  group events of the run
+    Machine -> Machine : _fail() at a health of zero
+    Policy -> Machine : request_repair() after an alarm
+    Machine -> Maint : repair(machine, begin, end)
+    Maint -> Machine : _begin_repair() and _end_repair()
+  end
+
+  Env --> Run
+  Run --> Rep : LineResult
+  Rep -> Ind : line_indicators(raw, warmup, end)
+  Ind --> Rep : LineIndicators
+  Rep --> Exp : ReplicationResult
+end
+
+[<-- Exp : list of ReplicationResult
+@enduml

@@ -1,0 +1,44 @@
+@startuml package-components
+!include _style.puml
+left to right direction
+
+' Modules of the package takt and their imports, read from the import
+' statements of the source files. An arrow runs from the importing module to
+' the imported one. plots imports no module of the package, and cli passes the
+' tables of analysis to it. The libraries are those named in pyproject.toml.
+
+package "takt" {
+  component "__main__" as __main__
+  component "cli" as cli
+  component "experiment" as experiment
+  component "analysis" as analysis
+  component "plots" as plots
+  component "model" as model
+  component "config" as config
+}
+
+component "simpy" as simpy <<library>>
+component "numpy" as numpy <<library>>
+component "pandas" as pandas <<library>>
+component "scipy" as scipy <<library>>
+component "matplotlib" as matplotlib <<library>>
+
+__main__ --> cli
+cli --> analysis
+cli --> experiment
+cli --> plots
+analysis --> experiment
+experiment --> config
+experiment --> model
+model --> config
+
+model --> simpy
+model --> numpy
+experiment --> numpy
+analysis --> numpy
+analysis --> pandas
+analysis --> scipy
+cli --> pandas
+plots --> pandas
+plots --> matplotlib
+@enduml

@@ -12,8 +12,8 @@ the implemented code.
 | `line-process-flow.puml` | Layout of the line with source, machines, buffers, sink, maintainers, and monitoring system | B1 | done |
 | `machine-states.puml` | State diagram of a machine | B1 | done |
 | `maintenance-activity.puml` | Activity diagram of the creation and service of a work order under the two maintenance policies | B6 | done |
-| `package-components.puml` | Component diagram of the simulation package | B8 | open |
-| `replication-sequence.puml` | Sequence of one replication from set up to result | B8 | open |
+| `package-components.puml` | Component diagram of the simulation package, with the imports between modules and libraries | B8 | done |
+| `replication-sequence.puml` | Sequence of one replication from the seeds to the indicators | B8 | done |
 
 ## Conventions
 
@@ -24,3 +24,6 @@ the implemented code.
 - The diagrams are rendered with
   `plantuml -tsvg -o out docs/diagrams/<file>.puml`. The rendered files are
   generated output and are not versioned.
+- The structure diagrams are checked by `tests/test_diagrams.py`: the arrows of
+  the component diagram have to equal the imports of the source files, and every
+  function and class named in the sequence diagram has to exist in the code.
