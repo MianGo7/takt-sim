@@ -392,3 +392,85 @@ It holds only in part once a preventive repair restores the health earlier,
 because the later degradation events of that machine then shift in time. The
 traces use memory in proportion to the number of events, which is acceptable
 at about 120,000 entries per run.
+
+---
+
+## ADR-0012: A buffer of capacity zero is a rendezvous between two machines
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** Scenario S4 varies the buffer capacity from 0 to 20 parts, and the
+extreme case of capacity zero belongs to the checks of B5. SimPy has no store
+of capacity zero, and the configuration rejected it until now.
+
+**Decision.** A capacity of zero is built as a link in which a machine can hand
+over only to a machine that is waiting for a part. The giving machine keeps its
+finished part and is blocked until the receiving machine asks for it, and the
+receiving machine is starved until a part is offered. Nothing waits in the
+link, so its level is always zero. A receiving machine that fails while it
+waits withdraws its request, in the same way as at a buffer, and the giving
+machine stays blocked until the repair has ended. The configuration accepts a
+capacity of zero and rejects a negative one.
+
+**Alternatives.** Using a store of capacity one for the case of zero was
+rejected because it adds one part of storage and would make the extreme case
+identical to a capacity of one. Letting the giving machine pass its part into
+the receiving machine while that machine is still busy was rejected because it
+adds a hidden place in the machine and gives a line without waiting space the
+throughput of a line with a buffer of one.
+
+**Consequences.** The work in progress is defined by the parts waiting in
+buffers (p. 419), so it is zero for a capacity of zero, and the parts that
+wait for the next machine are held inside the blocked machine. Comparisons of
+the work in progress across capacities in S4 have to say so. The line of equal
+machines loses no output with links of capacity zero, which the tests show for
+the reference line.
+
+---
+
+## ADR-0013: Criteria for the comparison with the published results
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** The reference case publishes means and a spread for the run to
+failure of the serial configuration (Dadfarnia et al., 2023, p. 421). The
+spread is the standard deviation across replications for the number of parts.
+For the availability and the repair count it equals the spread across the six
+machines (concept.md), and for the quality the paper does not say. The paper
+rounds the quality to two digits and the availability to two digits in percent.
+The paper reports the whole run of 10,080 hours and does not mention a warm-up
+period (p. 420).
+
+**Decision.** Scenario S1 is compared in two variants with 50 replications and
+the same seeds: observed from time zero, which is the like for like setting of
+the paper, and observed after the warm-up period of ADR-0011. A mean of the
+model agrees with the published mean when the difference is not larger than the
+half width of the 95 percent confidence interval plus the rounding of the paper.
+Because the published mean has its own sampling error, the difference is also
+given as a z value over the standard errors of both means. The standard error
+of the published number of parts follows from its published standard deviation
+across replications. For the other three indicators it is approximated with the
+standard deviation of the replications of this model, which assumes that the
+published model varies as much, and the table marks these rows. The spread of
+the model is computed in the sense in which the paper gives it. The comparison
+is produced by `uv run python -m takt validate` and written to
+`docs/figures/validation-s1.csv` together with the full summary of both
+variants. The verification against the analytic values uses a single machine
+whose parts arrive once per 1,000 hours, which does not change the degradation
+(A2) and keeps the test fast. Its tolerance is four standard errors of 100
+replications, so that the outcome with a fixed seed does not depend on luck, and
+the recorded deviations are below two standard errors.
+
+**Alternatives.** A comparison that requires the published mean to lie inside
+the confidence interval of the model alone was rejected because the interval of
+50 replications is narrow, and a deviation of a few hundredths of a percentage
+point would be reported as a failure although the published mean is itself an
+estimate. A single variant, either only from time zero or only after the
+warm-up, was rejected because the difference between them is itself a finding
+about the reference case. Tuning any parameter or assumption until all rows
+agree was rejected as a method; a deviation is reported and examined.
+
+**Consequences.** The agreement is judged row by row, and the z values of the
+rows with a stand-in standard error are indicative. The quality row cannot be
+judged by its z value, because the rounding of the paper is larger than the
+standard error of the model, and it is judged by the rounding.

@@ -154,3 +154,39 @@ def test_a_run_without_parts_has_no_lead_time_and_no_quality():
 
     assert math.isnan(indicators.mean_lead_time_h)
     assert math.isnan(indicators.mean_quality)
+
+
+def test_a_failure_is_counted_by_what_the_machine_was_doing_when_it_failed():
+    degradation = DegradationConfig(weibull_shape=1000.0, weibull_scale_h=0.55)
+    result = run_line(make_line([1.0], degradation=degradation), RunConfig(run_length_h=27.0))
+
+    indicators = line_indicators(result, 0.0, 27.0)
+
+    # The failure at about 4.4 hours meets a free maintainer and scraps the
+    # part in process, so the two counts agree.
+    assert indicators.failures_while_processing == 1
+    assert indicators.failures_while_processing == indicators.parts_scrapped
+    assert indicators.failures_while_starved == 0
+    assert indicators.failures_while_blocked == 0
+
+
+def test_a_machine_that_fails_while_starved_or_blocked_is_counted_as_such():
+    degradation = DegradationConfig(weibull_shape=1000.0, weibull_scale_h=1.0)
+    starved = run_line(
+        LineConfig(
+            machines=(MachineConfig(degradation=degradation),),
+            buffers=(),
+            arrival_interval_h=5.0,
+        ),
+        RunConfig(run_length_h=27.0),
+    )
+    blocked = run_line(
+        make_line([1.0, 5.0], capacity_parts=1, degradation=degradation),
+        RunConfig(run_length_h=27.0),
+    )
+
+    starved_counts = line_indicators(starved, 0.0, 27.0)
+    blocked_counts = line_indicators(blocked, 0.0, 27.0)
+
+    assert (starved_counts.failures_while_starved, starved_counts.parts_scrapped) == (1, 0)
+    assert (blocked_counts.failures_while_blocked, blocked_counts.parts_scrapped) == (1, 0)

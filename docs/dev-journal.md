@@ -207,3 +207,127 @@ Its values are not recorded here, because the comparison with the published
 results belongs to B5 and is made there with its own run.
 
 **Next.** B5, verification and validation.
+
+## 2026-10-06 (fifth entry)
+
+**Worked on.** Backlog item B5, verification and validation. For the
+verification, single machines with the parameters of M1 and of M3 were run in
+100 replications of 10,080 hours after a warm-up of 1,000 hours and compared
+with the analytic availability and repair count derived from the Weibull and
+gamma functions. The part accounting is now exact: the parts released by the
+source equal the parts produced, scrapped, waiting in buffers, and held by
+machines at every checked time, for buffer capacities of 0, 1, and 10 and three
+seeds. The extreme cases are covered: a buffer of capacity zero, which needed a
+new rendezvous link (ADR-0012), a very large buffer, one maintainer, and no more
+than three simultaneous repairs with three maintainers. For the validation, S1
+was run with 50 replications in two variants and compared with Table I of the
+reference case on p. 421, with `uv run python -m takt validate`. The tables are
+`docs/figures/validation-s1.csv` and `validation-s1-summary.csv`. The suite has
+104 tests and passes together with the static checks.
+
+**Decisions.** The criteria of the comparison are in ADR-0013 and the semantics
+of a capacity of zero in ADR-0012. Two indicators were added because the
+examination of the assumptions needs them: the spread of the part quality, and
+the number of failures by what the machine was doing, which bounds the effect of
+A9 without a second model.
+
+**Results.** All values are from commit 920c183 with the changes of this item,
+root seed 2026, 50 replications, 95 percent confidence level. The z values are
+over the standard errors of the model and of the published mean. Only the one of
+the number of parts rests on the published standard deviation of the
+replications, the others use the spread of this model as a stand-in (ADR-0013).
+
+| Indicator | Published | From time zero | After the warm-up |
+| --- | --- | --- | --- |
+| Availability, mean of six machines | 76.70 percent | 76.77 ± 0.05 (z 2.05) | 76.70 ± 0.05 (z -0.04) |
+| Repairs per machine | 115.12 | 114.79 ± 0.25 (z -1.90) | 115.25 ± 0.23 (z 0.81) |
+| Parts produced | 4,730.16 | 4,747.4 ± 15.1 (z 1.62) | 4,746.8 ± 15.3 (z 1.55) |
+| Mean quality | 0.60 | 0.6033 ± 0.0010 | 0.6028 ± 0.0010 |
+
+The spreads agree as well. The spread of the availability over machines is 0.0943
+against 0.0948, that of the repairs 47.20 and 47.27 against 47.43, that of the
+number of parts over replications 52.98 and 53.90 against 53.64, and that of the
+part quality 0.1238 and 0.1231 against 0.123. The last agreement supports the
+reading of the published spread of the quality as a spread over parts. The
+verification gave z values of 1.60 and 1.65 for the availability and the repair
+count of a regular machine and 1.23 and 1.20 for M3, all below two. The
+simulated availability after the warm-up, 0.7670, also follows from the
+analytic mean of six of 0.7701 and the share of 0.43 percent of the time that
+failed machines wait for a maintainer: 0.7701 × (1 - 0.0043) = 0.7668.
+
+**Deviations.** Three rows are not inside the confidence interval of the model
+plus the rounding of the paper in the variant from time zero: the availability,
+the repair count, and the number of parts. The repair count and the number of
+parts have a z value below 1.96, and the availability, at 2.05 with a stand-in
+standard error, lies marginally above it. In
+the variant after the warm-up the availability and the repair count agree, and
+the number of parts remains 17 above the published value, 0.35 percent. The
+direction of the two variants is consistent with the initial transient: a line
+with new machines has fewer failures in its first hours, so the whole run shows
+a slightly higher availability and fewer repairs than the steady state. The
+published values lie nearer to the steady state than to the whole run. Whether
+the authors used a warm-up period or started their machines at another health
+cannot be decided from the paper, and the deviation is recorded and not removed.
+
+**Assumptions.** The influence of each on the comparison, from the run or from
+a calculation, with the kind of evidence named.
+
+- A1, from a calculation with the verified formula: a scale in days gives an
+  availability of 0.990 for a regular machine and 0.968 for M3, a scale in
+  minutes 0.067 and 0.021, against 0.767 published for the mean. Only hours is
+  consistent.
+- A2, from Table I: the availability of the five configurations under the run to
+  failure lies between 76.66 and 76.70 percent while the number of parts lies
+  between 4,730 and 7,218 (p. 421). A degradation that depends on the use of the
+  machine would not give the same availability for such different utilisation.
+- A3 to A5, not varied: a variant needs a random cycle time, a random repair
+  time, and a noise term in the quality, none of which the paper quantifies. The
+  availability and the repair count do not depend on the distribution of the
+  repair time through the renewal argument, and the queue for maintainers is
+  short, see A8. The match of the quality spread shows no sign of a missing noise
+  term, but rests on the reading of that spread.
+- A6, not relevant in S1: it concerns the preventive repair and matters from B6.
+- A7, from the run: the first machine is never starved (share 0.0000) and is
+  blocked for about 30 percent of the time, so the rule for the source does not
+  affect S1.
+- A8, from the run: a failed machine waits for a maintainer between 0.38 and 0.56
+  percent of the time, so a different priority rule can act only on that share.
+- A9, from the run: a run has about 418 failures of a machine in process, which
+  equals the scrapped parts, 160 of a starved machine, and 112 of a blocked
+  machine. The alternative reading, which scraps the finished part of a blocked
+  machine, would remove at most 112 parts per run, 2.4 percent of the output. It
+  is the largest identified sensitivity, and the deviation of 17 parts lies
+  inside that bound, so the validation does not decide between the readings.
+- A10, from a calculation, not simulated: reading the health at the start of the
+  cycle raises the quality by about 0.0162, from the probability of a degradation
+  event in a cycle of one hour per machine. That would give about 0.619 against
+  0.60 published. The reading at the end of the cycle was fixed in the code
+  before the first run of S1.
+
+**Problems.** Two defects of this project were found. A test with one
+maintainer showed machine states that summed to more than the run, because a
+machine that failed while blocked stayed recorded as under repair after the
+repair had ended, although it still held its finished part. This came from B4
+and was corrected, and the machine is now recorded as blocked again at the end
+of its repair. It overstated the downtime of those machines and so slightly
+understated the availability indicator. The first run of S1 in B4 was not
+recorded, and the warm-up analysis used the output and the work in progress,
+which the defect does not touch. The first version of the count of failures by
+state returned about 50 failures per run against about 690 repairs, because a
+failure that meets a free maintainer goes to the repair at the same instant and
+the wait of length zero is not in the trace. It was noticed by comparing with
+the repairs and corrected, and a test now ties the failures in process to the
+scrapped parts. The published sampling error is not known for three of the four
+rows, which limits the z values to indicative ones.
+
+**Limits of the validation.** One configuration and one policy are validated,
+the serial line C1 under the run to failure, and the paper reports no other
+policy that the model contains. The published run may have differed in the
+treatment of the start, and the three assumptions A3 to A5 are not varied. The
+z values of three rows use a stand-in for the published standard error. The
+quality row is judged by the rounding of the paper. The validation therefore
+supports the degradation, repair, and quality logic for the run to failure, and
+it does not validate the condition-based policy, which has no published
+counterpart in the model.
+
+**Next.** B6, condition-based maintenance.

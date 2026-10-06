@@ -112,6 +112,14 @@ class LineIndicators:
         parts_scrapped: Parts scrapped by failures in the period.
         mean_quality: Mean quality of the produced parts, or NaN if none was
             produced.
+        std_quality: Sample standard deviation of the quality of the produced
+            parts, or NaN with fewer than two parts.
+        failures_while_processing: Failures of machines that were processing a
+            part, which scraps it.
+        failures_while_starved: Failures of machines that were waiting for a
+            part.
+        failures_while_blocked: Failures of machines that held a finished part,
+            which is not scrapped (A9).
         machines: The indicators of every machine.
     """
 
@@ -121,6 +129,10 @@ class LineIndicators:
     mean_wip_parts: float
     parts_scrapped: int
     mean_quality: float
+    std_quality: float
+    failures_while_processing: int
+    failures_while_starved: int
+    failures_while_blocked: int
     machines: tuple[MachineIndicators, ...]
 
 
@@ -165,6 +177,29 @@ def _mean(values: Sequence[float]) -> float:
     return math.fsum(values) / len(values) if values else math.nan
 
 
+def _std(values: Sequence[float]) -> float:
+    if len(values) < 2:
+        return math.nan
+    mean = _mean(values)
+    return math.sqrt(math.fsum((v - mean) ** 2 for v in values) / (len(values) - 1))
+
+
+def _failures_by_state(result: LineResult, start_h: float, end_h: float) -> dict[MachineState, int]:
+    """Count the failures in the window by the state the machine was in before.
+
+    A failure is the change from a working state to a down state. A machine
+    that meets a free maintainer goes to the repair at the same instant, so the
+    wait of length zero is not in the trace and both down states count.
+    """
+    down = (MachineState.AWAITING_REPAIR, MachineState.UNDER_REPAIR)
+    counts = dict.fromkeys(MachineState, 0)
+    for trace in result.machine_state_traces:
+        for (_, before), (time_h, state) in zip(trace, trace[1:], strict=False):
+            if state in down and before not in down and start_h <= time_h < end_h:
+                counts[before] += 1
+    return counts
+
+
 def line_indicators(result: LineResult, start_h: float, end_h: float) -> LineIndicators:
     """Reduce the raw output of a run to the indicators of the window.
 
@@ -183,6 +218,7 @@ def line_indicators(result: LineResult, start_h: float, end_h: float) -> LineInd
         for index in range(len(result.machine_state_traces))
     )
     scrapped = sum(1 for times in result.scrap_times_h for t in times if start_h <= t < end_h)
+    failures = _failures_by_state(result, start_h, end_h)
     return LineIndicators(
         parts_produced=len(parts),
         throughput_per_h=len(parts) / window_h,
@@ -190,6 +226,10 @@ def line_indicators(result: LineResult, start_h: float, end_h: float) -> LineInd
         mean_wip_parts=wip_part_h / window_h,
         parts_scrapped=scrapped,
         mean_quality=_mean([p.quality for p in parts]),
+        std_quality=_std([p.quality for p in parts]),
+        failures_while_processing=failures[MachineState.PROCESSING],
+        failures_while_starved=failures[MachineState.STARVED],
+        failures_while_blocked=failures[MachineState.BLOCKED],
         machines=machines,
     )
 
@@ -275,4 +315,19 @@ def s1_experiment() -> ExperimentConfig:
     return ExperimentConfig(name="s1", scenarios=(scenario,))
 
 
-EXPERIMENTS = {"s0": s0_experiment, "s1": s1_experiment}
+def s1_from_start_experiment() -> ExperimentConfig:
+    """Scenario S1 observed from time zero, the setting of the reference case.
+
+    The paper reports the indicators of the whole run of 10,080 hours without
+    a warm-up period (p. 420), so this variant is the like for like
+    comparison with it (ADR-0011).
+    """
+    scenario = Scenario("S1", reference_line_with_degradation())
+    return ExperimentConfig(name="s1-from-start", scenarios=(scenario,), warmup_h=0.0)
+
+
+EXPERIMENTS = {
+    "s0": s0_experiment,
+    "s1": s1_experiment,
+    "s1-from-start": s1_from_start_experiment,
+}

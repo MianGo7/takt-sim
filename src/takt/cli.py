@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from takt.analysis import mser_truncation, replication_table, summary_table, welch
+from takt.analysis import (
+    compare_with_published,
+    mser_truncation,
+    replication_table,
+    summary_table,
+    welch,
+)
 from takt.config import RunConfig
 from takt.experiment import (
     EXPERIMENTS,
@@ -20,6 +26,7 @@ from takt.experiment import (
 from takt.model import run_line
 
 RESULTS_DIR = Path("results")
+FIGURES_DIR = Path("docs/figures")
 WARMUP_BIN_H = 12.0
 WARMUP_WINDOW_BINS = 5
 
@@ -36,6 +43,22 @@ def _run(name: str, out: Path) -> None:
         json.dumps(dataclasses.asdict(config), indent=2, default=str) + "\n"
     )
     print(summary.to_string(index=False))
+
+
+def _validate(figures: Path) -> None:
+    """Run S1 as the reference case and after the warm-up and compare with the paper."""
+    figures.mkdir(parents=True, exist_ok=True)
+    comparisons, summaries = [], []
+    for name in ("s1-from-start", "s1"):
+        results = run_experiment(EXPERIMENTS[name]())
+        comparisons.append(compare_with_published(results).assign(variant=name))
+        summaries.append(summary_table(results).assign(variant=name))
+    comparison = pd.concat(comparisons, ignore_index=True)
+    comparison.to_csv(figures / "validation-s1.csv", index=False)
+    pd.concat(summaries, ignore_index=True).to_csv(
+        figures / "validation-s1-summary.csv", index=False
+    )
+    print(comparison.to_string(index=False))
 
 
 def _warmup(out: Path) -> None:
@@ -76,8 +99,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     run = commands.add_parser("run", help="run a named experiment and write its tables")
     run.add_argument("experiment", choices=sorted(EXPERIMENTS))
     commands.add_parser("warmup", help="analyse the initial transient of scenario S1")
+    validate = commands.add_parser("validate", help="compare S1 with the published results")
+    validate.add_argument(
+        "--figures", type=Path, default=FIGURES_DIR, help="folder for the committed tables"
+    )
     args = parser.parse_args(argv)
     if args.command == "run":
         _run(args.experiment, args.out)
+    elif args.command == "validate":
+        _validate(args.figures)
     else:
         _warmup(args.out)

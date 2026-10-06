@@ -100,7 +100,7 @@ Documents to update: `requirements.md` (FR9, FR10, FR11, FR12),
 
 ## B5: Verification and validation
 
-Status: open.
+Status: done.
 
 Scope: verify the model against the exact values of S0 and against the
 analytic availability and repair count in `concept.md`. Validate S1 against
