@@ -1,0 +1,51 @@
+@startuml line-process-flow
+!include _style.puml
+left to right direction
+
+' Layout of the reference case: six machines in series with a buffer of ten
+' parts between two neighbouring machines. The monitoring system and the
+' maintainers serve all six machines, so they are attached to the line as a
+' whole and not to a single machine.
+
+circle "Source" as Src
+circle "Sink" as Snk
+
+rectangle "Production line" as Line {
+  rectangle "M1" as M1
+  queue "B1" as B1
+  rectangle "M2" as M2
+  queue "B2" as B2
+  rectangle "M3" as M3
+  queue "B3" as B3
+  rectangle "M4" as M4
+  queue "B4" as B4
+  rectangle "M5" as M5
+  queue "B5" as B5
+  rectangle "M6" as M6
+}
+
+Src --> M1 : 1 part\nper hour
+M1 --> B1
+B1 --> M2
+M2 --> B2
+B2 --> M3
+M3 --> B3
+B3 --> M4
+M4 --> B4
+B4 --> M5
+M5 --> B5
+B5 --> M6
+M6 --> Snk
+
+node "Monitoring system" as CMS
+node "Maintainers (3)" as MT
+
+Line ..> CMS : health of every\nmachine, hourly
+CMS ..> MT : work order
+MT ..> Line : repair
+
+note bottom of M3
+  degrades faster
+  than the others
+end note
+@enduml
