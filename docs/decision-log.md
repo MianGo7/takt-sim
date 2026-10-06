@@ -209,3 +209,63 @@ model with the paper should find the same words in both.
 
 **Consequences.** Parameters can be checked against the paper without
 conversion.
+
+---
+
+## ADR-0008: The run covers the half-open interval from 0 up to the run length
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** In a line with constant cycle times, a part can reach the sink at
+exactly the end of the run. The reference case counts only parts that have
+left the line by the end of the run (p. 416) and does not say how an arrival
+at that instant is treated. For the reference line over 10,080 hours the
+choice changes the output by one part.
+
+**Decision.** A run covers the half-open interval from 0 up to but excluding
+the run length, and a part that arrives at the sink at exactly the run length
+is not counted. This is the behaviour of `env.run(until=...)` in SimPy, which
+stops before the events of the stop time are processed, so that the model
+needs no special rule. The first part leaves the reference line at 6 hours,
+and the output of S0 over 10,080 hours is therefore 10,074 parts.
+
+**Alternatives.** Counting an arrival at exactly the run length was rejected
+because it would require running past the stop time or a correction after the
+run, and it would depart from the default of the simulation library without a
+reason that the reference case supplies.
+
+**Consequences.** The expected output of S0 is `run length - 6` parts for an
+integer run length of at least 6 hours, and the tests compare with equality.
+
+---
+
+## ADR-0009: Single modules and one random number stream per machine from the start
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** B2 introduces the configuration and the model. The model has no
+random element yet, because the cycle times are constant (A3) and the
+degradation follows in B3.
+
+**Decision.** `config.py` and `model.py` are single modules, as in the
+architecture of the package. A sub-package for the model is introduced only
+if the module grows beyond what is readable, and that step is then recorded
+in its own ADR. The root seed of a run is part of the run configuration, and
+one generator per machine is derived from it with `SeedSequence.spawn` and
+handed to the machine, although the machine does not draw from it before B3.
+The derivation currently sits in `model.py` next to the line it feeds and
+moves into the experiment runner in B4, which owns replications.
+
+**Alternatives.** Adding the seed and the streams in B3 was rejected because
+the construction of a machine and the signature of the run would change
+together with the first draw, which would mix an interface change with a new
+rule. A single shared generator was rejected because a draw made by one
+machine would shift the sequence of every other machine, which defeats common
+random numbers across scenarios.
+
+**Consequences.** The test that two runs with the same seed are identical
+holds trivially in B2 and becomes informative in B3, when the degradation
+draws from the streams. In B3 each machine will need several streams, one per
+source of randomness, so the list of generators becomes one record per
+machine.
+

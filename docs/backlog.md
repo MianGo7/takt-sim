@@ -45,7 +45,7 @@ Documents to update: `concept.md`, `requirements.md`, `diagrams/README.md`,
 
 ## B2: Line without degradation
 
-Status: open.
+Status: done.
 
 Scope: the configuration as immutable data with the parameters of the
 reference case as its default, the machines with their cycle times, the

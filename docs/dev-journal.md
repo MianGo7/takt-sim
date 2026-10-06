@@ -79,3 +79,39 @@ does not state. They may not be reproducible, which is why the validation
 rests on the run-to-failure policy.
 
 **Next.** B2, the line without degradation.
+
+## 2026-10-06 (second entry)
+
+**Worked on.** Backlog item B2, the line without degradation. The
+configuration is implemented as frozen dataclasses with the parameters of the
+reference case as defaults and with validation on construction. The model
+consists of a source, machines with a constant cycle time, buffers of limited
+capacity, and a sink. Blocking and starvation are not coded as states: a
+machine that cannot hand over its finished part waits on the full buffer and
+holds the part, and a machine without a part waits on the empty one. The
+tests compare with equality: the S0 output of 10,074 parts, the first part at
+6 hours, a slow last machine that fills its buffer and blocks the machine
+before it, a slow first machine and a slow source that starve the machines
+behind them, the output limit of the slowest machine, the conservation of
+parts, and the identity of two runs with the same seed. The suite has 26 tests
+and passes together with the static checks.
+
+**Decisions.** The run covers the half-open interval up to the run length,
+which is the default of SimPy (ADR-0008). The modules stay single files, and
+the seed and one generator per machine exist from the start (ADR-0009). The
+source is modelled as a supplier that the first machine pulls from, with the
+next offer one interval after the previous part was taken, which is the
+reading of A7 that loses no part and adds no hidden buffer in front of the
+line.
+
+**Problems.** The expected output of one test, a line with a machine of 3
+hours, was first written down as 98 parts and the model returned 99. The
+completions fall at 5 + 3k hours, and the last one before 300 hours is k = 98,
+so 99 is correct and the expectation was a miscount. The test was corrected
+after deriving the value, not after seeing the model output alone. A second
+point is a limit: a buffer capacity of zero is rejected by the configuration,
+because a store of capacity zero does not exist in SimPy. The extreme case
+belongs to B5 and needs a rendezvous between two machines.
+
+**Next.** B3, degradation, failure, and corrective repair.
+
