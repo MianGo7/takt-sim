@@ -29,4 +29,11 @@ CorrectiveRepair --> Operational : after 20 hours\n/ health = 1
 
 Operational --> PreventiveRepair : maintainer arrives\n[work order pending]\n/ pause processing
 PreventiveRepair --> Operational : after 2.5 hours [health >= 0.5]\nor 5 hours [health < 0.5]\n/ health = 1, resume
+
+note right of PreventiveRepair
+  The part in process is paused and keeps its remaining cycle time (A11).
+  A machine has at most one open work order (A12). The model records
+  CorrectiveRepair and PreventiveRepair as the one state under_repair and
+  tells them apart by the RepairKind of the repair.
+end note
 @enduml

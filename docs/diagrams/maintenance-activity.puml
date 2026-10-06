@@ -1,0 +1,62 @@
+@startuml maintenance-activity
+!include _style.puml
+
+' Creation and service of a work order under the two maintenance policies.
+' The failure of a machine creates a work order under both. Only the
+' condition-based policy has the monitoring system, which is the one thing a
+' scenario exchanges. Names of operations match the classes ConditionBased,
+' Machine, and Maintainers in model.py.
+
+|Machine|
+start
+split
+  :degradation event lowers the health by 0.125;
+  if (health = 0?) then (yes)
+    :the machine fails,\nscrap the part in process;
+    :request_repair;
+  else (no)
+    :the machine keeps producing;
+    stop
+  endif
+split again
+  |Monitoring system|
+  :read the health of the machine\nonce per sensing interval;
+  if (health <= alarm threshold?) then (yes)
+    :alarm with the\ndetection probability;
+  else (no)
+    :false alarm with the\nfalse alarm probability;
+  endif
+  if (alarm raised?) then (yes)
+    |Machine|
+    :request_repair;
+  else (no)
+    |Monitoring system|
+    stop
+  endif
+end split
+
+|Machine|
+if (work order already open?) then (yes)
+  :ignore the request,\nthe open work order serves it;
+  stop
+else (no)
+  :create work order;
+endif
+
+|Maintainers|
+:wait for a free maintainer,\nfirst created first served;
+
+|Machine|
+if (health = 0?) then (yes)
+  :corrective repair, 20 hours;
+else (no)
+  :pause the part in process;
+  if (health >= 0.5?) then (yes)
+    :preventive repair, 2.5 hours;
+  else (no)
+    :preventive repair, 5 hours;
+  endif
+endif
+:health = 1,\nresume the part in process;
+stop
+@enduml

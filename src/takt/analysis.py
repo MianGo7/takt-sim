@@ -68,6 +68,7 @@ def _machine_values(machines: Sequence[MachineIndicators]) -> dict[str, float]:
         for field in (
             "availability",
             "repairs",
+            "repairs_preventive",
             "share_processing",
             "share_starved",
             "share_blocked",
@@ -77,6 +78,7 @@ def _machine_values(machines: Sequence[MachineIndicators]) -> dict[str, float]:
             values[f"{field}_{machine.name}"] = float(getattr(machine, field))
     values["availability_mean"] = _average([m.availability for m in machines])
     values["repairs_mean"] = _average([float(m.repairs) for m in machines])
+    values["repairs_preventive_mean"] = _average([float(m.repairs_preventive) for m in machines])
     return values
 
 
@@ -97,6 +99,8 @@ def flatten(indicators: LineIndicators) -> dict[str, float]:
         "failures_while_processing": float(indicators.failures_while_processing),
         "failures_while_starved": float(indicators.failures_while_starved),
         "failures_while_blocked": float(indicators.failures_while_blocked),
+        "alarms_true": float(indicators.alarms_true),
+        "alarms_false": float(indicators.alarms_false),
         **_machine_values(indicators.machines),
     }
 

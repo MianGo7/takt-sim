@@ -5,6 +5,7 @@ al., 2023, p. 420). Every field carries its unit in its name, and the values
 are validated on construction. Implements NFR4.
 """
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 
@@ -16,6 +17,10 @@ RUN_LENGTH_H = 10_080.0  # p. 420
 HEALTH_STEPS = 8  # p. 417, nine health values from 1 down to 0 in steps of 0.125
 MAINTAINERS = 3  # p. 420
 CORRECTIVE_REPAIR_TIME_H = 20.0  # pp. 418, 422
+DETERIORATED_REPAIR_TIME_H = 5.0  # pp. 419, 422, health above 0 and below 0.5
+MILD_REPAIR_TIME_H = 2.5  # pp. 419, 422, health of 0.5 or more (A6)
+MILD_HEALTH_LIMIT = 0.5  # p. 419
+SENSING_INTERVAL_H = 1.0  # pp. 418, 422
 REGULAR_WEIBULL_SHAPE = 1.5  # pp. 417, 420, machines M1, M2, M4, M5, M6
 REGULAR_WEIBULL_SCALE_H = 12.0  # pp. 417, 420, unit by A1
 M3_WEIBULL_SHAPE = 0.9  # pp. 417, 420
@@ -88,24 +93,83 @@ class BufferConfig:
 
 @dataclass(frozen=True)
 class RepairConfig:
-    """Maintainers and the duration of a corrective repair.
+    """Maintainers and the duration of a repair by the health of the machine.
 
-    Implements FR4 and FR5.
+    Implements FR4 to FR6.
 
     Attributes:
         maintainers: Number of repairs that can run at the same time.
         corrective_repair_time_h: Constant duration in hours of the repair of
             a failed machine (A4).
+        deteriorated_repair_time_h: Duration in hours of a repair at a health
+            above 0 and below 0.5.
+        mild_repair_time_h: Duration in hours of a repair at a health of 0.5
+            or more, which includes 0.5 itself (A6).
     """
 
     maintainers: int = MAINTAINERS
     corrective_repair_time_h: float = CORRECTIVE_REPAIR_TIME_H
+    deteriorated_repair_time_h: float = DETERIORATED_REPAIR_TIME_H
+    mild_repair_time_h: float = MILD_REPAIR_TIME_H
 
     def __post_init__(self) -> None:
-        """Validate the number of maintainers and the repair time."""
+        """Validate the number of maintainers and the repair times."""
         if self.maintainers < 1:
             raise ValueError(f"maintainers must be at least 1, got {self.maintainers}")
         _require_positive_finite("corrective_repair_time_h", self.corrective_repair_time_h)
+        _require_positive_finite("deteriorated_repair_time_h", self.deteriorated_repair_time_h)
+        _require_positive_finite("mild_repair_time_h", self.mild_repair_time_h)
+
+    def repair_time_h(self, health: float) -> float:
+        """Return the duration of a repair that starts at the given health."""
+        if health <= 0.0:
+            return self.corrective_repair_time_h
+        if health < MILD_HEALTH_LIMIT:
+            return self.deteriorated_repair_time_h
+        return self.mild_repair_time_h
+
+
+@dataclass(frozen=True)
+class RunToFailureConfig:
+    """Maintenance policy without monitoring: a machine is repaired when it fails.
+
+    Implements FR4. This is scenario S1.
+    """
+
+
+@dataclass(frozen=True)
+class ConditionBasedConfig:
+    """Maintenance policy with a monitoring system that reads the health.
+
+    Implements FR7 and FR8. The defaults describe an ideal signal. The error
+    rates are not taken from the reference case, they are the variables of
+    scenario S3 (ADR-0006).
+
+    Attributes:
+        alarm_threshold: A reading at or below this health is an alarm. A value
+            below the smallest health that is not zero never raises an alarm
+            for a working machine.
+        sensing_interval_h: Time in hours between two readings (pp. 418, 422).
+        detection_probability: Probability that a reading at or below the
+            threshold raises an alarm. One means no missed alarms.
+        false_alarm_probability: Probability that a reading above the threshold
+            raises an alarm. Zero means no false alarms.
+    """
+
+    alarm_threshold: float
+    sensing_interval_h: float = SENSING_INTERVAL_H
+    detection_probability: float = 1.0
+    false_alarm_probability: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Validate the threshold, the interval, and the probabilities."""
+        if not 0.0 <= self.alarm_threshold <= 1.0:
+            raise ValueError(f"alarm_threshold must lie in [0, 1], got {self.alarm_threshold}")
+        _require_positive_finite("sensing_interval_h", self.sensing_interval_h)
+        for name in ("detection_probability", "false_alarm_probability"):
+            value = getattr(self, name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must lie in [0, 1], got {value}")
 
 
 def _reference_machines() -> tuple[MachineConfig, ...]:
@@ -128,13 +192,16 @@ class LineConfig:
             machines.
         arrival_interval_h: Time in hours between the offers of the source
             (A7).
-        repair: The maintainers and the corrective repair time.
+        repair: The maintainers and the repair times.
+        policy: The maintenance policy. A scenario changes this field and
+            nothing else (ADR-0014).
     """
 
     machines: tuple[MachineConfig, ...] = field(default_factory=_reference_machines)
     buffers: tuple[BufferConfig, ...] = field(default_factory=_reference_buffers)
     arrival_interval_h: float = ARRIVAL_INTERVAL_H
     repair: RepairConfig = field(default_factory=RepairConfig)
+    policy: RunToFailureConfig | ConditionBasedConfig = field(default_factory=RunToFailureConfig)
 
     def __post_init__(self) -> None:
         """Validate the number of machines and buffers and the arrival interval."""
@@ -160,6 +227,22 @@ def reference_line_with_degradation() -> LineConfig:
         for index in range(MACHINES_IN_SERIES)
     )
     return LineConfig(machines=machines)
+
+
+def reference_line_condition_based(
+    alarm_threshold: float,
+    detection_probability: float = 1.0,
+    false_alarm_probability: float = 0.0,
+) -> LineConfig:
+    """Return the reference line with degradation under condition-based maintenance.
+
+    Scenario S2 varies the threshold with an ideal signal, and scenario S3 the
+    two error rates. Implements FR7 and FR8.
+    """
+    policy = ConditionBasedConfig(
+        alarm_threshold, SENSING_INTERVAL_H, detection_probability, false_alarm_probability
+    )
+    return dataclasses.replace(reference_line_with_degradation(), policy=policy)
 
 
 @dataclass(frozen=True)

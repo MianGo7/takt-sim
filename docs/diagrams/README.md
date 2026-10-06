@@ -11,7 +11,7 @@ the implemented code.
 | --- | --- | --- | --- |
 | `line-process-flow.puml` | Layout of the line with source, machines, buffers, sink, maintainers, and monitoring system | B1 | done |
 | `machine-states.puml` | State diagram of a machine | B1 | done |
-| `maintenance-activity.puml` | Activity diagram of the two maintenance policies | B6 | open |
+| `maintenance-activity.puml` | Activity diagram of the creation and service of a work order under the two maintenance policies | B6 | done |
 | `package-components.puml` | Component diagram of the simulation package | B8 | open |
 | `replication-sequence.puml` | Sequence of one replication from set up to result | B8 | open |
 

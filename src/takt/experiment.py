@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from takt.config import LineConfig, RunConfig, reference_line_with_degradation
-from takt.model import LineResult, MachineState, run_line
+from takt.model import LineResult, MachineState, RepairKind, run_line
 
 type Trace[T] = Sequence[tuple[float, T]]
 
@@ -80,7 +80,9 @@ class MachineIndicators:
         name: Name of the machine.
         availability: Share of the time in which the machine was neither
             awaiting nor under repair (p. 419).
-        repairs: Repairs completed in the period.
+        repairs: Repairs completed in the period, corrective and preventive.
+        repairs_preventive: Preventive repairs among them, which include the
+            repairs that a false alarm causes.
         share_processing: Share of the time spent processing.
         share_starved: Share of the time spent waiting for a part.
         share_blocked: Share of the time spent waiting for buffer space.
@@ -91,6 +93,7 @@ class MachineIndicators:
     name: str
     availability: float
     repairs: int
+    repairs_preventive: int
     share_processing: float
     share_starved: float
     share_blocked: float
@@ -120,6 +123,10 @@ class LineIndicators:
             part.
         failures_while_blocked: Failures of machines that held a finished part,
             which is not scrapped (A9).
+        alarms_true: Alarms in the period that created a work order and were
+            read at or below the alarm threshold.
+        alarms_false: Alarms in the period that created a work order and were
+            read above the alarm threshold.
         machines: The indicators of every machine.
     """
 
@@ -133,6 +140,8 @@ class LineIndicators:
     failures_while_processing: int
     failures_while_starved: int
     failures_while_blocked: int
+    alarms_true: int
+    alarms_false: int
     machines: tuple[MachineIndicators, ...]
 
 
@@ -185,17 +194,11 @@ def _std(values: Sequence[float]) -> float:
 
 
 def _failures_by_state(result: LineResult, start_h: float, end_h: float) -> dict[MachineState, int]:
-    """Count the failures in the window by the state the machine was in before.
-
-    A failure is the change from a working state to a down state. A machine
-    that meets a free maintainer goes to the repair at the same instant, so the
-    wait of length zero is not in the trace and both down states count.
-    """
-    down = (MachineState.AWAITING_REPAIR, MachineState.UNDER_REPAIR)
+    """Count the failures in the window by the state the machine was in before."""
     counts = dict.fromkeys(MachineState, 0)
-    for trace in result.machine_state_traces:
-        for (_, before), (time_h, state) in zip(trace, trace[1:], strict=False):
-            if state in down and before not in down and start_h <= time_h < end_h:
+    for failures in result.failures:
+        for time_h, before in failures:
+            if start_h <= time_h < end_h:
                 counts[before] += 1
     return counts
 
@@ -230,6 +233,10 @@ def line_indicators(result: LineResult, start_h: float, end_h: float) -> LineInd
         failures_while_processing=failures[MachineState.PROCESSING],
         failures_while_starved=failures[MachineState.STARVED],
         failures_while_blocked=failures[MachineState.BLOCKED],
+        alarms_true=sum(1 for a in result.alarms if a.true_alarm and start_h <= a.time_h < end_h),
+        alarms_false=sum(
+            1 for a in result.alarms if not a.true_alarm and start_h <= a.time_h < end_h
+        ),
         machines=machines,
     )
 
@@ -243,13 +250,12 @@ def _machine_indicators(
     for state, duration_h in _segments(result.machine_state_traces[index], start_h, end_h):
         time_in[state] += duration_h
     down_h = time_in[MachineState.AWAITING_REPAIR] + time_in[MachineState.UNDER_REPAIR]
-    repairs = sum(
-        1 for r in result.repairs if r.machine == name and start_h <= r.finished_at_h < end_h
-    )
+    done = [r for r in result.repairs if r.machine == name and start_h <= r.finished_at_h < end_h]
     return MachineIndicators(
         name=name,
         availability=(window_h - down_h) / window_h,
-        repairs=repairs,
+        repairs=len(done),
+        repairs_preventive=sum(1 for r in done if r.kind is RepairKind.PREVENTIVE),
         share_processing=time_in[MachineState.PROCESSING] / window_h,
         share_starved=time_in[MachineState.STARVED] / window_h,
         share_blocked=time_in[MachineState.BLOCKED] / window_h,
