@@ -405,3 +405,109 @@ preventive repair (ADR-0014). The signal is a pair of error rates and not a
 measurement, so the model cannot say how a real sensor would produce them.
 
 **Next.** B7, experiments and results.
+
+## 2026-10-06 (seventh entry)
+
+**Worked on.** Backlog item B7, experiments and results. The scenarios S2 to S4
+are defined in code: S2 varies the alarm threshold over the seven health values
+with an ideal signal, S3 a grid of four detection and four false alarm
+probabilities at the threshold of the best S2 setting, and S4 the buffer
+capacity over 0, 1, 2, 5, 10, 15, and 20 parts for the run to failure and for
+that setting. All use the root seed 2026, so that their replications pair. The
+analysis gained the paired differences with confidence intervals, which common
+random numbers make narrower than two independent intervals, and the rule for
+the best scenario. The new `plots` module writes three figures as PDF and as PNG
+at 300 dots per inch, black on white with the 95 percent interval as error
+bars. The command `uv run python -m takt all` produces every table and figure in
+`docs/figures/`, including the validation of S1 and a check of the initial
+transient. Replications can run in separate processes, and the tables of a
+serial run and of a run with 18 workers are identical byte for byte. The suite
+has 144 tests and passes together with the static checks.
+
+**Decisions.** The best setting is the threshold with the highest output, the
+warm-up of S4 is 516 hours, and the replications run in parallel (ADR-0015). The
+published perfect monitoring system is compared with every threshold of S2, and
+the one with the highest quality in the model is marked.
+
+**Results.** All values are from the working tree on top of commit 034178f, root
+seed 2026, 50 replications, warm-up of 252 hours for S1 to S3 and 516 hours for
+S4, 95 percent confidence level. Differences are paired by replication.
+
+| Setting | Parts produced | Difference from S1 | Quality | Availability | Repairs per machine | Lead time (h) |
+| --- | --- | --- | --- | --- | --- | --- |
+| S1, run to failure | 4,746.8 ± 15.3 | | 0.603 | 76.70 % | 115.3 | 52.0 |
+| S2, threshold 0.125 | 7,494.5 ± 24.4 | +2,747.7 ± 24.9 | 0.630 | 90.53 % | 159.1 | 34.9 |
+| S2, threshold 0.5 | 8,240.6 ± 8.1 | +3,493.8 ± 14.3 | 0.809 | 92.41 % | 286.4 | 31.7 |
+| S2, threshold 0.875 | 5,996.2 ± 16.0 | +1,249.4 ± 20.1 | 0.988 | 78.26 % | 876.7 | 42.7 |
+
+The output of S2 is above that of S1 at every threshold, and every difference
+is clear. It is highest at 0.5, the best setting, and lowest at 0.875, where the
+quality is highest. It is not monotone: it is 7,901 at 0.25, 7,697 at 0.375, and
+8,241 at 0.5. A change of the repair class at a health of 0.5 is consistent with
+the step, because a repair from 0.5 upwards takes 2.5 hours and below it 5
+hours, but this was not tested. The work in progress is 20.5 to 21.1 parts at
+every threshold against 21.9 under S1, and the lead time falls from 52.0 hours
+to between 31.7 and 42.7 hours.
+
+For S3 at a threshold of 0.5, the ideal signal gives the 8,240.6 parts of S2.
+A false alarm probability of 0.05 per reading with perfect detection costs 531
+parts, about 2,620 false alarms per run, and raises the quality from 0.809 to
+0.875 and the repairs per machine from 286 to 577. A detection probability of 0.5
+without false alarms costs 211 parts. The worst corner, detection 0.5 and false
+alarms 0.05, gives 7,582 ± 11 parts, which is 2,835 ± 19 above S1. Every cell of
+the grid is clearly above S1.
+
+For S4, the output under the run to failure rises from 2,098.6 parts at a
+capacity of 0 to 5,336.7 at 20. Under the best setting it is 6,645.9 at 0, 7,601.7
+at 1, 8,070.2 at 2, and 8,240.6 at every capacity from 5 to 20, identical in
+every replication. This is consistent with an output that M3 alone limits once
+the buffers absorb the other machines, which was not tested. The advantage of the
+best setting is 4,547 ± 30 parts at a capacity of 0, 5,168 ± 22 at 2, and 2,904 ±
+14 at 20. The work in progress grows in proportion to the capacity, and the lead
+time from 14.3 hours at 0 to 82.4 hours at 20 under the run to failure and from
+7.5 to 56.1 hours under the best setting.
+
+**Surprise.** The reference case reports that the perfect monitoring system
+lowers the output from 4,730 to 3,971 parts and the availability from 76.7 to
+66.1 percent (p. 421), and the model gives a higher output and availability at
+every threshold. At the threshold with the highest quality, 0.875, it gives 5,996
+parts, 78.26 percent, 876.7 repairs, and a quality of 0.988, against 3,971.2
+parts, 66.09 percent, 669 repairs, and a quality of 0.79 published. No threshold
+of the sweep reproduces the published row, which `s2-vs-published.csv` shows for
+all seven. The model validates for the run to failure (B5), so the difference
+lies in the condition-based policy or in the reading of it. The causes that come
+to mind are the scale of the threshold, the classification of the repair time by
+health, the definition of the quality, and a delay between the alarm and the
+repair, but none was tested, and the paper does not give the information to
+decide. The results of S2 to S4 are therefore results of this model and are not
+validated against the paper. This limits what the report can claim about the
+trade-off between quality and output, and it is part of the critical
+reflection.
+
+**Check of the warm-up.** The truncation points of S1, of the lowest and highest
+threshold of S2, and of the worst signal of S3 are at most 252 hours. The run to
+failure needs 276 hours at a capacity of 0 and 348 and 516 hours at a capacity of
+20 for the output and the work in progress. A first run of the command with the
+warm-up of 252 hours for S4 showed this in its own table, and the warm-up of S4
+was raised to 516 hours and the whole set run again.
+
+**Runtime.** The complete set took 6 min 43 s with one worker and 40 s with 18
+workers on the machine of the author, so NFR6 is met on a single core. The first
+version of the command started a pool of processes also for a single task, which
+made the test suite several seconds slower, and the number of workers is now
+limited to the number of tasks.
+
+**Problems.** The first version of the figure module chose its file backend after
+an import and silenced the resulting finding with a comment for the linter. This
+is not allowed without a decision record, so the order of the statements was
+changed instead, and the finding does not occur. The error bars of most points
+are smaller than the markers, because the intervals of 50 replications are
+narrow, which is a property of the results and not a defect of the figures.
+
+**Limits.** The conditions of S2 to S4 depend on A11 and A12, and on the signal as
+a pair of error rates. The false alarm probabilities are per reading and machine,
+and their scale is a choice. The capacities between those whose transient was
+checked are assumed to lie between them. A capacity of zero gives a work in
+progress of zero by the definition of the reference case (ADR-0012).
+
+**Next.** B8, structure diagrams and final review.

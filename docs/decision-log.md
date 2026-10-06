@@ -542,3 +542,60 @@ later degradation events of the repaired machine shift (ADR-0011). The
 influence of A11 and A12 on S2 and S3 is not examined yet, and the comparison of
 S2 with the perfect monitoring system of the paper, which publishes one setting
 only, belongs to B7.
+
+---
+
+## ADR-0015: Best setting by output, a longer warm-up for S4, and parallel replications
+
+Date: 2026-10-06. Status: accepted.
+
+**Context.** B7 runs S2 to S4. The concept names "the best setting of S2" as the
+base of S3 and S4 without defining best. The consequence of ADR-0011 said that
+the warm-up has to be checked for scenarios with another structure. The
+complete set of experiments has to run in under ten minutes (NFR6).
+
+**Decision.** The best setting of S2 is the alarm threshold with the highest mean
+number of parts produced, because question 2 asks whether condition-based
+maintenance can improve the output. The threshold with the highest quality, which
+is the criterion of the reference case, is reported next to it, and the table
+that compares S2 with the published perfect monitoring system marks it. S3 and S4
+use the threshold of the best setting. The grid of S3 has detection probabilities
+of 1, 0.9, 0.75, and 0.5 and false alarm probabilities per reading of 0, 0.002,
+0.01, and 0.05, which gives about 110, 550, and 2,600 false alarms per run for
+the three non-zero values. S4 varies the capacity over 0, 1, 2, 5, 10, 15, and 20
+parts for the run to failure and for the best setting.
+
+The initial transient was checked for S1, the lowest and the highest threshold
+of S2, the worst signal of S3, and both policies at capacities of 0, 10, and 20,
+with the marginal standard error rule of ADR-0011 on the output and the work in
+progress per 12 hours. The truncation point of S1 is the 252 hours in use,
+and those of the checked scenarios of S2 and S3 are at most 192 hours. The run to failure at a capacity of zero
+needs 276 hours and at a capacity of 20 hours 348 hours for the output and 516
+hours for the work in progress. S4 therefore uses a warm-up of 516 hours, the
+largest of the points found, and S1 to S3 keep 252 hours. The check is part of
+the command that produces the report, and its table marks any scenario whose
+truncation point exceeds the warm-up of its experiment.
+
+The replications of an experiment run in separate processes of the standard
+library when more than one worker is given. Every replication has its own seed
+and no shared state, so the results do not depend on the number of workers. The
+tables of a run with one worker and of a run with 18 workers are identical byte
+for byte.
+
+**Alternatives.** The best setting by quality was rejected because the highest
+threshold repairs a machine at its first degradation event, which gives the
+lowest output of all settings that were run, and S3 and S4 would then describe
+an extreme. A single warm-up of 516 hours for all experiments was rejected
+because the checks of S1 to S3 do not call for it and it would change the
+validated tables of S1. Threads were rejected because the model is pure Python
+and the interpreter lock would serialise it, and a library for parallel loops
+was rejected because it would add a dependency for a loop of independent calls.
+Running serially was kept as the default of the function and costs 6 minutes and
+43 seconds for the whole set, within the limit, but it is slow for development.
+
+**Consequences.** Values of S4 are not comparable with those of S1 at the same
+capacity, because the warm-up differs, and S4 compares its own scenarios. The
+threshold of S3 and S4 follows from the result of S2 and has to be given to
+`run s3` and `run s4`, and the command for the report derives it from S2. The
+capacities between those that were checked are assumed to lie between their
+truncation points.

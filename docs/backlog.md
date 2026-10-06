@@ -138,7 +138,7 @@ Documents to update: `requirements.md` (FR6, FR7, FR8), `diagrams/README.md`,
 
 ## B7: Experiments and results
 
-Status: open.
+Status: done.
 
 Scope: define and run the scenarios S0 to S4, including the variation of the
 alarm threshold, the signal quality, and the buffer capacity. Generate the
