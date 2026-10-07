@@ -457,15 +457,17 @@ without false alarms costs 211 parts. The worst corner, detection 0.5 and false
 alarms 0.05, gives 7,582 ± 11 parts, which is 2,835 ± 19 above S1. Every cell of
 the grid is clearly above S1.
 
-For S4, the output under the run to failure rises from 2,098.6 parts at a
-capacity of 0 to 5,336.7 at 20. Under the best setting it is 6,645.9 at 0, 7,601.7
-at 1, 8,070.2 at 2, and 8,240.6 at every capacity from 5 to 20, identical in
+For S4, the output under the run to failure rises from 2,097.0 parts at a
+capacity of 0 to 5,332.8 at 20. Under the best setting it is 6,644.6 at 0, 7,601.7
+at 1, 8,069.9 at 2, and 8,240.2 at every capacity from 5 to 20, identical in
 every replication. This is consistent with an output that M3 alone limits once
 the buffers absorb the other machines, which was not tested. The advantage of the
-best setting is 4,547 ± 30 parts at a capacity of 0, 5,168 ± 22 at 2, and 2,904 ±
+best setting is 4,548 ± 28 parts at a capacity of 0, 5,169 ± 21 at 2, and 2,907 ±
 14 at 20. The work in progress grows in proportion to the capacity, and the lead
 time from 14.3 hours at 0 to 82.4 hours at 20 under the run to failure and from
-7.5 to 56.1 hours under the best setting.
+7.5 to 56.2 hours under the best setting. The values of S4 follow from the
+warm-up of 516 hours, so that the best setting at a capacity of 10 gives 8,240.2
+parts here and 8,240.6 in S2, where the warm-up is 252 hours.
 
 **Surprise.** The reference case reports that the perfect monitoring system
 lowers the output from 4,730 to 3,971 parts and the availability from 76.7 to
@@ -511,6 +513,23 @@ checked are assumed to lie between them. A capacity of zero gives a work in
 progress of zero by the definition of the reference case (ADR-0012).
 
 **Next.** B8, structure diagrams and final review.
+
+**Correction (2026-10-07).** The first version of this entry gave the values of
+S4 as 2,098.6, 5,336.7, 6,645.9, 8,070.2, and 8,240.6 parts, which differ from the
+committed `s4-summary.csv`, and the differences from the paired table and the
+lead time of the best setting were affected in the same way. The cause is the
+order of the work. The first run of the command for the report used the warm-up
+of 252 hours for S4. Its own check of the transient then showed that S4 needs 516
+hours, the warm-up of S4 was raised, and the whole set was run again. The values
+in this entry were copied from the output of the first run and not read again
+from the files of the second. The cause was confirmed on 2026-10-07 by running five
+scenarios of S4 with both warm-up periods: 252 hours gives exactly the values of the
+first version, 2,098.62, 5,336.68, 6,645.88, 8,070.16, and 8,240.60, and 516 hours
+gives the committed ones, 2,097.02, 5,332.82, 6,644.62, 8,069.88, and 8,240.16. The
+entry above now uses the committed values. The tables, the figure, and the
+decision record were not affected, because they were written by the second run
+or do not contain these values. The lesson for the record is that a value is
+taken from the committed file and not from the console output of an earlier run.
 
 ## 2026-10-06 (eighth entry)
 
@@ -566,3 +585,65 @@ a measurement.
 
 **Next.** The report is written from `docs/` and from the files in
 `docs/figures/`, which are complete.
+
+## 2026-10-07
+
+**Worked on.** Backlog item B9, decomposition of the published monitoring results,
+which was added after the review of B7 had shown that the model and the published
+perfect monitoring row disagree. The command `uv run python -m takt decompose`
+splits the published availability and repair count of a row into a regular machine
+and the third machine, reading the spread as the population spread across six
+machines of which five are identical, and writes
+`docs/figures/published-monitoring-decomposition.csv` with 52 rows. The command for
+the report writes it as well. The analytic part is in `analysis.py`, which now also
+imports the parameters from `config.py`, and the component diagram has the new
+arrow, which `tests/test_diagrams.py` requires. The suite has 159 tests and passes
+together with the static checks. The other 18 files of `docs/figures/` are unchanged
+after a new run of the whole set.
+
+**Results.** The values are from the published rows of Table I on p. 421 and from
+the analytic expressions, so that no simulation and no seed are involved.
+
+| Row or expectation | Availability, regular / third | Repairs, regular / third | Downtime per repair (h) |
+| --- | --- | --- | --- |
+| Published run to failure, decomposed | 80.94 / 55.49 percent | 93.9 / 221.2 | 20.46 / 20.28 |
+| Analytic run to failure | 81.25 / 55.80 percent | 94.5 / 222.8 | 20 |
+| Published perfect monitoring, decomposed | 70.44 / 44.34 percent | 609.2 / 968.2 | 4.89 / 5.80 |
+| Alarm at the first event, repair 2.5 h | 81.93 / 59.39 percent | 728.7 / 1,637.3 | 2.5 |
+| Alarm at the first event, repair 5 h | 69.39 / 42.24 percent | 617.2 / 1,164.4 | 5 |
+
+For the mean of six machines, the alarm at the first degradation event with a mean
+sensing delay of 0.5 hours gives 78.2 percent and 880.1 repairs at a repair of 2.5
+hours and 64.9 percent and 708.4 repairs at 5 hours, against 66.09 percent and 669.0
+published. The break-even repair time against the run to failure is 2.6 hours for a
+regular machine, 2.9 hours for the third machine, and 2.7 hours for the mean of six.
+The check of the reading on the run to failure row has differences from the analytic
+values of -0.31 percentage points for both machines and of -0.6 and -1.6 repairs,
+which is the size of the waiting for a maintainer. The finding and its limits are in
+ADR-0016: the published row matches a preventive downtime of about 5 hours and not
+the documented 2.5 hours, and the published quality of 0.79 is not explained.
+
+**Deviation from the expected values.** The task named 880.2 repairs for the mean of
+six at a repair of 2.5 hours. The computation gives 880.13, which rounds to 880.1, so
+the test accepts the named value within 0.1 and the table keeps the computed one. All
+other named values are reproduced at the digits given.
+
+**Correction of the entry of B7.** The values of S4 in that entry came from the first
+run of the command with a warm-up of 252 hours and not from the committed tables. The
+entry now has the committed values, and the reason is stated in its correction
+paragraph.
+
+**Problems.** The first version of the break-even function returned its two results in
+one object and needed a type exclusion to do so. It was replaced by a function that
+returns the two machines and the mean of six as separate values. The tolerance of the
+test of the reading was first written without a reason. It was replaced by 0.5
+percentage points and 2 repairs, with the sizes of the waiting for a maintainer and
+of the sampling error written next to it.
+
+**Limits.** The decomposition assumes five identical machines and uses the rounded
+published numbers. It ignores the waiting for a maintainer. A simulation of a
+preventive repair of 5 hours would show whether it reproduces the published row, and it
+was not run, because it would be a variant of the model and not a result of this
+item.
+
+**Next.** The cause of the difference in the published quality remains open.

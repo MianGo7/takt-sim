@@ -599,3 +599,81 @@ threshold of S3 and S4 follows from the result of S2 and has to be given to
 `run s3` and `run s4`, and the command for the report derives it from S2. The
 capacities between those that were checked are assumed to lie between their
 truncation points.
+
+---
+
+## ADR-0016: Reading of the published monitoring rows and the downtime that the perfect monitoring row implies
+
+Date: 2026-10-07. Status: accepted.
+
+**Context.** B7 found that the model gives a higher output and availability than the
+published perfect monitoring row at every alarm threshold (journal, seventh entry).
+The published row has an availability of 66.09 ± 9.729 percent and 669.00 ± 133.812
+repairs per machine, and a quality of 0.79 (Dadfarnia et al., 2023, p. 421). It
+is a mean over six machines, five of which are identical, and the third machine
+degrades faster, so it hides two different kinds of machine. A decomposition shows
+what the row implies for each of them.
+
+**Decision.** The published spread is read as the population standard deviation across
+the six machines, of which five are identical. With a mean m and a spread s, the
+difference between a regular machine and the third machine is 6 s divided by the
+square root of 5, and the third machine is lower for the availability and higher for
+the repair count. The command `uv run python -m takt decompose` applies this reading
+and writes `docs/figures/published-monitoring-decomposition.csv`, and the command
+for the report writes it as well.
+
+The reading was checked on the run to failure row, 76.70 ± 9.484 percent and 115.12 ±
+47.427 repairs, whose analytic values are known. It gives 80.94 percent and 93.9
+repairs for a regular machine and 55.49 percent and 221.2 repairs for the third
+machine, against 81.25 and 55.80 percent and 94.5 and 222.8 repairs analytically.
+The differences of 0.31 percentage points and of 0.6 and 1.6 repairs are of the size
+of the waiting for a maintainer, which the analytic values ignore. The implied
+downtime per repair is 20.46 and 20.28 hours against the documented 20 hours. The
+reading is therefore accepted.
+
+Applied to the perfect monitoring row it gives 70.44 percent and 609.2 repairs for a
+regular machine and 44.34 percent and 968.2 repairs for the third machine, and an
+implied downtime per repair of 4.89 and 5.80 hours. For an alarm at the first
+degradation event with a mean sensing delay of 0.5 hours, the expectation without
+waiting is 78.2 percent and 880.1 repairs for the mean of six at a repair of 2.5
+hours, and 64.9 percent and 708.4 repairs at a repair of 5 hours. The published row
+lies at 66.09 percent and 669.0 repairs, which is 1.2 percentage points and 5.6
+percent from the expectation for 5 hours and 12.1 percentage points and 24 percent
+from the one for 2.5 hours. The published row therefore matches a preventive
+downtime of about 5 hours per repair and not the 2.5 hours that the reference case
+documents for a health of 0.5 or more (pp. 419, 422). The break-even repair time
+against the run to failure, at which both give the same availability, is 2.6 hours for
+a regular machine, 2.9 hours for the third machine, and 2.7 hours for the mean of
+six. A repair of 2.5 hours is below it and one of 5 hours is above it, which is why
+the model finds a gain in availability and the published row a loss.
+
+The published quality of 0.79 is not explained. An alarm at the first degradation
+event keeps every machine at a health of 0.875 or more, which gives a quality of
+0.988 in the model (S2, threshold 0.875). A quality near 0.79 corresponds in the model
+to a threshold between 0.375 and 0.5, with 220 to 290 repairs per machine and not
+669. The availability and the repair count of the row and its quality cannot come
+from one threshold in the model, and no cause was identified. The causes that come to
+mind, a different scale of the threshold, a different classification of the repair
+time by health, a different definition of the quality, and a delay between alarm and
+repair, were not tested.
+
+The model is not changed. The repair times stay at their documented values, and the
+results of S2 to S4 are reported with them.
+
+**Alternatives.** Reading the spread as the standard deviation of the replications was
+rejected because the model gives a spread of the mean availability across replications
+of about 0.2 percentage points and the published value is 9.5, whereas the spread
+across machines is 0.0943 in the model against 0.0948 published (journal, B5). Setting
+the preventive repair time to 5 hours so that the published row is matched was
+rejected, because a parameter is not tuned to a published value and a deviation is
+examined and reported. A simulation of that variant would be a diagnostic and was not
+run in this item.
+
+**Consequences.** The report cannot claim that S2 to S4 reproduce the trade-off of the
+reference case, and it has to state that the published perfect monitoring row implies
+a downtime per repair of about 5 hours where the documented repair times give 2.5
+hours, with the table as evidence. The decomposition rests on the assumption that
+five machines are identical and on the rounding of the published numbers, and it
+ignores the waiting for a maintainer, which adds a few tenths of an hour to the
+downtime per repair in the run to failure row and more in a row with 669 repairs per
+machine.

@@ -165,3 +165,28 @@ and the fresh clone reproduces the committed figures.
 
 Documents to update: `requirements.md`, `diagrams/README.md`, `README.md`,
 `dev-journal.md`.
+
+---
+
+## B9: Decomposition of the published monitoring results
+
+Status: done.
+
+Scope: a command that decomposes the published perfect monitoring row of the
+reference case (availability 66.09 ± 9.729, repairs 669.00 ± 133.812) into a
+regular machine and the third machine, reading the standard deviation as the
+population spread across six machines of which five are identical. The reading
+is checked on the run to failure row (76.70 ± 9.484, 115.12 ± 47.427) against
+the analytic values. The command adds the expected availability and repairs for
+an alarm at the first degradation event with a mean sensing delay of 0.5 hours
+and a repair of 2.5 hours and of 5 hours, the implied downtime per repair, and
+the break-even repair time against the run to failure. It writes
+`docs/figures/published-monitoring-decomposition.csv`.
+
+Done when: the CSV is reproduced by one command, the values are covered by
+tests, and a decision record states that the published row matches a preventive
+downtime of about 5 hours and not the documented 2.5 hours, and that the
+published quality of 0.79 is not explained.
+
+Documents to update: `backlog.md`, `decision-log.md`, `dev-journal.md`,
+`README.md`.
