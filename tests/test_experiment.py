@@ -153,6 +153,7 @@ def test_the_command_for_the_report_writes_every_table_and_figure(tmp_path, caps
     assert written == {
         "validation-s1.csv",
         "validation-s1-summary.csv",
+        "published-monitoring-decomposition.csv",
         "s0-summary.csv",
         "s1-summary.csv",
         "s2-summary.csv",

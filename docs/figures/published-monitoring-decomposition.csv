@@ -1,0 +1,53 @@
+section,case,machine,quantity,value,unit,basis
+published row,"run-to-failure, C1 and Pi1",published mean of six machines,availability,76.7,percent,published
+published row,"run-to-failure, C1 and Pi1",published spread across machines,availability,9.484,percentage points,published
+published row,"run-to-failure, C1 and Pi1",published mean of six machines,repairs,115.12,repairs per run,published
+published row,"run-to-failure, C1 and Pi1",published spread across machines,repairs,47.427,repairs per run,published
+decomposition,"run-to-failure, C1 and Pi1",regular machine,availability,80.9413737397216,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",third machine,availability,55.493131301392,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",mean of six machines,availability,76.7,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",regular machine,repairs,93.91000080622351,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",third machine,repairs,221.16999596888252,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",mean of six machines,repairs,115.12,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"run-to-failure, C1 and Pi1",regular machine,downtime per repair,20.456921632874153,hours,implied by the decomposition
+decomposition,"run-to-failure, C1 and Pi1",third machine,downtime per repair,20.284362465923653,hours,implied by the decomposition
+published row,"perfect monitoring, C1 and Pi5",published mean of six machines,availability,66.09,percent,published
+published row,"perfect monitoring, C1 and Pi5",published spread across machines,availability,9.729000000000001,percentage points,published
+published row,"perfect monitoring, C1 and Pi5",published mean of six machines,repairs,669.0,repairs per run,published
+published row,"perfect monitoring, C1 and Pi5",published spread across machines,repairs,133.812,repairs per run,published
+decomposition,"perfect monitoring, C1 and Pi5",regular machine,availability,70.44094107061909,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",third machine,availability,44.33529464690454,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",mean of six machines,availability,66.08999999999999,percent,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",regular machine,repairs,609.1574543589596,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",third machine,repairs,968.2127282052019,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",mean of six machines,repairs,669.0,repairs per run,"read as the population spread across six machines, five of them identical"
+decomposition,"perfect monitoring, C1 and Pi5",regular machine,downtime per repair,4.89126927489888,hours,implied by the decomposition
+decomposition,"perfect monitoring, C1 and Pi5",third machine,downtime per repair,5.79521641901286,hours,implied by the decomposition
+analytic check of the reading,"run-to-failure, C1 and Pi1",regular machine,availability,81.24945180251972,percent,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",third machine,availability,55.80345818319731,percent,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",mean of six machines,availability,77.00845286596598,percent,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",regular machine,repairs,94.50276291530064,repairs per run,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",third machine,repairs,222.75057075668553,repairs per run,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",mean of six machines,repairs,115.87739755553146,repairs per run,"analytic, without waiting for a maintainer"
+analytic check of the reading,"run-to-failure, C1 and Pi1",regular machine,"availability, decomposition minus analytic",-0.308078062798117,percentage points,derived
+analytic check of the reading,"run-to-failure, C1 and Pi1",third machine,"availability, decomposition minus analytic",-0.31032688180530954,percentage points,derived
+analytic check of the reading,"run-to-failure, C1 and Pi1",regular machine,"repairs, decomposition minus analytic",-0.5927621090771282,repairs per run,derived
+analytic check of the reading,"run-to-failure, C1 and Pi1",third machine,"repairs, decomposition minus analytic",-1.580574787803016,repairs per run,derived
+analytic check of the reading,"run-to-failure, C1 and Pi1",regular machine,"downtime per repair, corrective repair",20.0,hours,"documented, p. 422"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",regular machine,availability,81.92720155898299,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",third machine,availability,59.392849438869696,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",mean of six machines,availability,78.17147620563077,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",regular machine,repairs,728.6952331418059,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",third machine,repairs,1637.2803106247734,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",mean of six machines,repairs,880.1260793889672,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 2.5 h",all machines,downtime per repair,2.5,hours,equals the repair time
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",regular machine,availability,69.38702448041794,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",third machine,availability,42.2402766871007,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",mean of six machines,availability,64.86256651486507,percent,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",regular machine,repairs,617.1575864747747,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",third machine,repairs,1164.4360219880498,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",mean of six machines,repairs,708.3706590603206,repairs per run,"analytic, without waiting for a maintainer"
+alarm at the first degradation event,"mean sensing delay 0.5 h, repair 5 h",all machines,downtime per repair,5.0,hours,equals the repair time
+break-even,"mean sensing delay 0.5 h, against the run to failure",regular machine,break-even repair time,2.6153887674408827,hours,"analytic, repair time with equal availability"
+break-even,"mean sensing delay 0.5 h, against the run to failure",third machine,break-even repair time,2.8960018183076555,hours,"analytic, repair time with equal availability"
+break-even,"mean sensing delay 0.5 h, against the run to failure",mean of six machines,break-even repair time,2.680766730126707,hours,"analytic, repair time with equal availability"

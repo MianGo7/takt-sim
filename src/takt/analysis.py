@@ -10,8 +10,21 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy import stats
+from scipy import optimize, stats
 
+from takt.config import (
+    CORRECTIVE_REPAIR_TIME_H,
+    DETERIORATED_REPAIR_TIME_H,
+    HEALTH_STEPS,
+    M3_WEIBULL_SCALE_H,
+    M3_WEIBULL_SHAPE,
+    MACHINES_IN_SERIES,
+    MILD_REPAIR_TIME_H,
+    REGULAR_WEIBULL_SCALE_H,
+    REGULAR_WEIBULL_SHAPE,
+    RUN_LENGTH_H,
+    SENSING_INTERVAL_H,
+)
 from takt.experiment import LineIndicators, MachineIndicators, ReplicationResult
 
 CONFIDENCE_LEVEL = 0.95
@@ -413,3 +426,347 @@ PUBLISHED_C1_PERFECT_MONITORING = (
     PublishedValue("parts_produced", 3971.20, 50.869, "replications", 0.005),
     PublishedValue("mean_quality", 0.79, 0.075, "unspecified", 0.005),
 )
+
+
+@dataclass(frozen=True)
+class MachineValues:
+    """A value for a regular machine and for the third machine.
+
+    Attributes:
+        regular: Value of each of the five regular machines.
+        third: Value of the third machine, which degrades faster.
+    """
+
+    regular: float
+    third: float
+
+    @property
+    def mean_of_machines(self) -> float:
+        """Mean over the six machines."""
+        return (self.regular * (MACHINES_IN_SERIES - 1) + self.third) / MACHINES_IN_SERIES
+
+
+def split_published_spread(mean: float, spread: float, third_is_lower: bool) -> MachineValues:
+    """Split a published mean and spread into a regular machine and the third machine.
+
+    The spread is read as the population standard deviation across the six
+    machines, of which five are identical, which is the reading that the
+    analytic values of the run to failure support (ADR-0016). With n machines,
+    a value a for n - 1 of them and a value b for one, the mean is
+    (a (n - 1) + b) / n and the standard deviation is
+    |a - b| sqrt(n - 1) / n, which gives both values. The third machine is
+    lower than the others for the availability and higher for the repair count.
+    """
+    n = MACHINES_IN_SERIES
+    difference = n * spread / math.sqrt(n - 1)
+    if third_is_lower:
+        return MachineValues(mean + difference / n, mean - difference * (n - 1) / n)
+    return MachineValues(mean - difference / n, mean + difference * (n - 1) / n)
+
+
+def mean_degradation_interval_h(shape: float, scale_h: float) -> float:
+    """Mean time between two degradation events of a Weibull distribution (A1)."""
+    return scale_h * math.gamma(1.0 + 1.0 / shape)
+
+
+_DEGRADATION = MachineValues(
+    mean_degradation_interval_h(REGULAR_WEIBULL_SHAPE, REGULAR_WEIBULL_SCALE_H),
+    mean_degradation_interval_h(M3_WEIBULL_SHAPE, M3_WEIBULL_SCALE_H),
+)
+
+
+def run_to_failure_expectation() -> tuple[MachineValues, MachineValues]:
+    """Analytic availability, as a fraction, and repairs per run under the run to failure.
+
+    A machine fails after eight degradation events and is repaired in 20 hours,
+    and the waiting for a maintainer is ignored. Implements NFR2.
+    """
+    uptime_h = MachineValues(_DEGRADATION.regular * HEALTH_STEPS, _DEGRADATION.third * HEALTH_STEPS)
+    cycle_h = MachineValues(
+        uptime_h.regular + CORRECTIVE_REPAIR_TIME_H, uptime_h.third + CORRECTIVE_REPAIR_TIME_H
+    )
+    availability = MachineValues(uptime_h.regular / cycle_h.regular, uptime_h.third / cycle_h.third)
+    repairs = MachineValues(RUN_LENGTH_H / cycle_h.regular, RUN_LENGTH_H / cycle_h.third)
+    return availability, repairs
+
+
+def first_event_alarm_expectation(
+    sensing_delay_h: float, repair_time_h: float
+) -> tuple[MachineValues, MachineValues]:
+    """Availability, as a fraction, and repairs per run for an alarm at the first degradation event.
+
+    The machine produces for the first degradation interval and for the delay
+    until the next reading, and is then repaired in the given time. The waiting
+    for a maintainer is ignored.
+    """
+    cycle_h = MachineValues(
+        _DEGRADATION.regular + sensing_delay_h + repair_time_h,
+        _DEGRADATION.third + sensing_delay_h + repair_time_h,
+    )
+    availability = MachineValues(
+        (_DEGRADATION.regular + sensing_delay_h) / cycle_h.regular,
+        (_DEGRADATION.third + sensing_delay_h) / cycle_h.third,
+    )
+    repairs = MachineValues(RUN_LENGTH_H / cycle_h.regular, RUN_LENGTH_H / cycle_h.third)
+    return availability, repairs
+
+
+def break_even_repair_time_h(sensing_delay_h: float) -> tuple[MachineValues, float]:
+    """Repair time at which the alarm at the first event matches the run to failure.
+
+    For a machine the break-even is the repair time at which its availability
+    under the alarm at the first degradation event equals its analytic
+    availability under the run to failure. The first value of the result holds
+    it for a regular machine and the third machine, and the second is the
+    repair time at which the mean availability of the six machines is equal,
+    which is found numerically.
+    """
+    rtf, _ = run_to_failure_expectation()
+
+    def single(interval_h: float, availability: float) -> float:
+        return (interval_h + sensing_delay_h) * (1.0 - availability) / availability
+
+    def gap(repair_time_h: float) -> float:
+        preventive, _ = first_event_alarm_expectation(sensing_delay_h, repair_time_h)
+        return preventive.mean_of_machines - rtf.mean_of_machines
+
+    mean_of_six = float(optimize.brentq(gap, 0.01, CORRECTIVE_REPAIR_TIME_H))
+    machines = MachineValues(
+        single(_DEGRADATION.regular, rtf.regular), single(_DEGRADATION.third, rtf.third)
+    )
+    return machines, mean_of_six
+
+
+MEAN_SENSING_DELAY_H = SENSING_INTERVAL_H / 2.0
+PREVENTIVE_REPAIR_TIMES_H = (MILD_REPAIR_TIME_H, DETERIORATED_REPAIR_TIME_H)
+MACHINE_NAMES = ("regular machine", "third machine", "mean of six machines")
+
+
+def _published(items: Sequence[PublishedValue], indicator: str) -> PublishedValue:
+    return next(item for item in items if item.indicator == indicator)
+
+
+def decompose_published_monitoring() -> pd.DataFrame:
+    """Decompose the published rows of the reference case and set expectations beside them.
+
+    The table has one row per section, case, machine, and quantity. The
+    published availability and repair count of the run to failure and of the
+    perfect monitoring system are split into a regular machine and the third
+    machine (ADR-0016). The split of the run to failure is compared with its
+    analytic values, which checks the reading. For an alarm at the first
+    degradation event, the expectation is given for a repair of 2.5 hours and
+    of 5 hours, together with the downtime per repair that the published row
+    implies and the break-even repair time against the run to failure.
+    """
+    rows: list[dict[str, object]] = []
+
+    def add(
+        section: str, case: str, machine: str, quantity: str, value: float, unit: str, basis: str
+    ):
+        rows.append(
+            {
+                "section": section,
+                "case": case,
+                "machine": machine,
+                "quantity": quantity,
+                "value": value,
+                "unit": unit,
+                "basis": basis,
+            }
+        )
+
+    def add_machines(section, case, quantity, values: MachineValues, unit, basis):
+        add(section, case, MACHINE_NAMES[0], quantity, values.regular, unit, basis)
+        add(section, case, MACHINE_NAMES[1], quantity, values.third, unit, basis)
+        add(section, case, MACHINE_NAMES[2], quantity, values.mean_of_machines, unit, basis)
+
+    reading = "read as the population spread across six machines, five of them identical"
+    split: dict[str, tuple[MachineValues, MachineValues]] = {}
+    for case, items in (
+        ("run-to-failure, C1 and Pi1", PUBLISHED_C1_RUN_TO_FAILURE),
+        ("perfect monitoring, C1 and Pi5", PUBLISHED_C1_PERFECT_MONITORING),
+    ):
+        availability = _published(items, "availability_mean")
+        repairs = _published(items, "repairs_mean")
+        add(
+            "published row",
+            case,
+            "published mean of six machines",
+            "availability",
+            availability.mean * 100,
+            "percent",
+            "published",
+        )
+        add(
+            "published row",
+            case,
+            "published spread across machines",
+            "availability",
+            availability.spread * 100,
+            "percentage points",
+            "published",
+        )
+        add(
+            "published row",
+            case,
+            "published mean of six machines",
+            "repairs",
+            repairs.mean,
+            "repairs per run",
+            "published",
+        )
+        add(
+            "published row",
+            case,
+            "published spread across machines",
+            "repairs",
+            repairs.spread,
+            "repairs per run",
+            "published",
+        )
+        split[case] = (
+            split_published_spread(availability.mean * 100, availability.spread * 100, True),
+            split_published_spread(repairs.mean, repairs.spread, False),
+        )
+        downtime = MachineValues(
+            *(
+                (100.0 - a) / 100.0 * RUN_LENGTH_H / r
+                for a, r in (
+                    (split[case][0].regular, split[case][1].regular),
+                    (split[case][0].third, split[case][1].third),
+                )
+            )
+        )
+        add_machines("decomposition", case, "availability", split[case][0], "percent", reading)
+        add_machines("decomposition", case, "repairs", split[case][1], "repairs per run", reading)
+        add(
+            "decomposition",
+            case,
+            MACHINE_NAMES[0],
+            "downtime per repair",
+            downtime.regular,
+            "hours",
+            "implied by the decomposition",
+        )
+        add(
+            "decomposition",
+            case,
+            MACHINE_NAMES[1],
+            "downtime per repair",
+            downtime.third,
+            "hours",
+            "implied by the decomposition",
+        )
+
+    rtf_availability, rtf_repairs = run_to_failure_expectation()
+    case = "run-to-failure, C1 and Pi1"
+    check = "analytic check of the reading"
+    analytic_availability = MachineValues(
+        rtf_availability.regular * 100, rtf_availability.third * 100
+    )
+    add_machines(
+        check,
+        case,
+        "availability",
+        analytic_availability,
+        "percent",
+        "analytic, without waiting for a maintainer",
+    )
+    add_machines(
+        check,
+        case,
+        "repairs",
+        rtf_repairs,
+        "repairs per run",
+        "analytic, without waiting for a maintainer",
+    )
+    published_availability, published_repairs = split[case]
+    for machine, own, expected in (
+        (MACHINE_NAMES[0], published_availability.regular, analytic_availability.regular),
+        (MACHINE_NAMES[1], published_availability.third, analytic_availability.third),
+    ):
+        add(
+            check,
+            case,
+            machine,
+            "availability, decomposition minus analytic",
+            own - expected,
+            "percentage points",
+            "derived",
+        )
+    for machine, own, expected in (
+        (MACHINE_NAMES[0], published_repairs.regular, rtf_repairs.regular),
+        (MACHINE_NAMES[1], published_repairs.third, rtf_repairs.third),
+    ):
+        add(
+            check,
+            case,
+            machine,
+            "repairs, decomposition minus analytic",
+            own - expected,
+            "repairs per run",
+            "derived",
+        )
+    add(
+        check,
+        case,
+        MACHINE_NAMES[0],
+        "downtime per repair, corrective repair",
+        CORRECTIVE_REPAIR_TIME_H,
+        "hours",
+        "documented, p. 422",
+    )
+
+    section = "alarm at the first degradation event"
+    for repair_time_h in PREVENTIVE_REPAIR_TIMES_H:
+        case = f"mean sensing delay {MEAN_SENSING_DELAY_H:g} h, repair {repair_time_h:g} h"
+        availability, repairs = first_event_alarm_expectation(MEAN_SENSING_DELAY_H, repair_time_h)
+        add_machines(
+            section,
+            case,
+            "availability",
+            MachineValues(availability.regular * 100, availability.third * 100),
+            "percent",
+            "analytic, without waiting for a maintainer",
+        )
+        add_machines(
+            section,
+            case,
+            "repairs",
+            repairs,
+            "repairs per run",
+            "analytic, without waiting for a maintainer",
+        )
+        add(
+            section,
+            case,
+            "all machines",
+            "downtime per repair",
+            repair_time_h,
+            "hours",
+            "equals the repair time",
+        )
+
+    machines, mean_of_six = break_even_repair_time_h(MEAN_SENSING_DELAY_H)
+    case = f"mean sensing delay {MEAN_SENSING_DELAY_H:g} h, against the run to failure"
+    basis = "analytic, repair time with equal availability"
+    add(
+        "break-even",
+        case,
+        MACHINE_NAMES[0],
+        "break-even repair time",
+        machines.regular,
+        "hours",
+        basis,
+    )
+    add(
+        "break-even",
+        case,
+        MACHINE_NAMES[1],
+        "break-even repair time",
+        machines.third,
+        "hours",
+        basis,
+    )
+    add("break-even", case, MACHINE_NAMES[2], "break-even repair time", mean_of_six, "hours", basis)
+    return pd.DataFrame(rows)

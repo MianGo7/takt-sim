@@ -27,6 +27,7 @@ __main__ --> cli
 cli --> analysis
 cli --> experiment
 cli --> plots
+analysis --> config
 analysis --> experiment
 experiment --> config
 experiment --> model

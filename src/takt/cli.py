@@ -14,6 +14,7 @@ from takt.analysis import (
     PUBLISHED_C1_PERFECT_MONITORING,
     best_scenario,
     compare_with_published,
+    decompose_published_monitoring,
     difference_table,
     mser_truncation,
     paired_table,
@@ -84,6 +85,14 @@ def _validate(figures: Path, workers: int, adjust: Adjust = lambda c: c) -> None
         figures / "validation-s1-summary.csv", index=False
     )
     print(comparison.to_string(index=False))
+
+
+def _decompose(figures: Path) -> None:
+    """Decompose the published monitoring rows and write the table (ADR-0016)."""
+    figures.mkdir(parents=True, exist_ok=True)
+    table = decompose_published_monitoring()
+    table.to_csv(figures / "published-monitoring-decomposition.csv", index=False)
+    print(table.to_string(index=False))
 
 
 def _transient_check(
@@ -180,6 +189,7 @@ def _all(figures: Path, out: Path, workers: int, adjust: Adjust = lambda c: c) -
         return results
 
     _validate(figures, workers, adjust)
+    _decompose(figures)
     summary_table(run(EXPERIMENTS["s0"]())).to_csv(figures / "s0-summary.csv", index=False)
     s1 = run(EXPERIMENTS["s1"]())
     s1_summary = summary_table(s1)
@@ -271,6 +281,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     commands.add_parser("warmup", help="analyse the initial transient of scenario S1")
     for name, text in (
         ("validate", "compare S1 with the published results"),
+        ("decompose", "decompose the published monitoring rows into two kinds of machine"),
         ("all", "run every experiment and write every table and figure of the report"),
     ):
         sub = commands.add_parser(name, help=text)
@@ -282,6 +293,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         _run(args.experiment, args.out, args.workers, args.threshold)
     elif args.command == "validate":
         _validate(args.figures, args.workers)
+    elif args.command == "decompose":
+        _decompose(args.figures)
     elif args.command == "all":
         _all(args.figures, args.out, args.workers)
     else:
